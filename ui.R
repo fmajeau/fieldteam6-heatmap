@@ -1,0 +1,196 @@
+#
+# This is the user-interface definition of a Shiny web application. You can
+# run the application by clicking 'Run App' above.
+#
+# Find out more about building applications with Shiny here:
+#
+#    http://shiny.rstudio.com/
+#
+
+
+# Define UI for application
+shinyUI(
+    fluidPage(
+        
+        #display title & subtitle
+        titlePanel(
+            tags$div(class="p", checked=NA,
+                     tags$strong(style=paste('color:',strColorAqua),"Field Team 6 "),
+                     tags$strong(style=paste('color:',strColorSalmon),"HEAT MAP"),
+                     tags$br(),
+                     tags$i(style=paste('color:','silver', ';font-size: 16px'),"Where America Needs Democrats Most")
+                     
+            ) ,
+            windowTitle = 'Field Team 6 HEAT MAP' #text in browser tab
+        ),
+        
+        #set background color of entire page
+        setBackgroundColor(strFieldTeam6Webpage),
+        
+        #make the map tabs show up on the righthand side of the page
+        #tags$head(
+        #    tags$style(HTML(".tabbable ul li { float: right; }"))
+        #),
+        
+        #plot sidebar 
+        sidebarPanel(
+            textInput("zipcode",
+                       "Enter your zipcode:"
+            ),
+            sliderInput("miles",
+                        "Choose your travel range (miles):",
+                        #Filter table by proximity (miles):",
+                        min = mileSliderMin,
+                        max = mileSliderMax,
+                        value = mileSliderMin
+            ),
+            actionButton("reset", tags$strong(style='color:grey',"Reset"), style='width:100%'),
+            tags$p(""),
+            htmlOutput('clickedDistrictInfo')
+        ),
+    
+        #plot map and friendly/detailed view toggle
+        mainPanel(
+            prettyRadioButtons("radio", label=NULL, inline=TRUE,
+                               choiceNames = list(tags$strong(style = 'color:silver','FRIENDLY VIEW'), tags$strong(style = 'color:silver','DETAILED VIEW')  ), 
+                               choiceValues = list( 'friendly', 'detailed'),
+                               selected = 'friendly',
+                               shape = 'curve'),
+            leafletOutput("usmap", height = 500)
+        ),
+        
+        #plot data table
+        fluidRow(
+            column(12, #table width (full width = 12)
+                   dataTableOutput('datatable')
+            )
+        ),
+        
+        #display links to data sources
+        tags$div(class="p", checked=NA,
+                 tags$br(),
+                 tags$span(style='color:silver;font-weight:bold',"SOURCES "),
+                 tags$a(href="https://catalog.data.gov/harvest/116th-congressional-district", "Congressional District Map Data"),
+                 tags$span(style='color:silver',"|"),
+                 tags$a(href="http://clerk.house.gov/member_info/", "House of Representatives Member Data"),
+                 tags$span(style='color:silver',"|"),
+                 tags$a(href="https://www.senate.gov/general/contact_information/senators_cfm.cfm", "Senate Member Data"),
+                 tags$span(style='color:silver',"|"),
+                 tags$span(style='color:grey', "District priority analysis performed by Jason Berlin"),
+                 #tags$p(style='color:lightgrey', 'We apologize for bugs and appreciate your patience while this tool is still in development mode... improvements will occur regularly!')
+                 tags$br(),
+                 tags$br()
+        )
+    
+    ) #end of fluidPage
+            
+) #end of shinyUI
+
+
+#HTML table display describing classes 
+#(feature of very first version, not using anymore)
+
+# tags$div(class="table", checked=NA,
+#          tags$table(style = "padding: 10%; width: 100%; rules: all",    
+#                     tags$tr(
+#                         tags$th("Target Class"),
+#                         tags$th(""),
+#                         tags$th("House"),
+#                         tags$th("Senate"),
+#                         tags$th("President")
+#                     ),
+#                     tags$tr(
+#                         tags$td(1),
+#                         tags$td(""),
+#                         tags$td('X (flip)'),
+#                         tags$td('X'),
+#                         tags$td('X')
+#                     ),
+#                     tags$tr(
+#                         tags$td(2),
+#                         tags$td(""),
+#                         tags$td('X (hold)'),
+#                         tags$td('X'),
+#                         tags$td('X')
+#                     ),
+#                     tags$tr(
+#                         tags$td(3),
+#                         tags$td(""),
+#                         tags$td('--'),
+#                         tags$td('X'),
+#                         tags$td('X')
+#                     ),
+#                     tags$tr(
+#                         tags$td(4),
+#                         tags$td(""),
+#                         tags$td('X (flip)'),
+#                         tags$td('--'),
+#                         tags$td('X')
+#                     ),
+#                     tags$tr(
+#                         tags$td(5),
+#                         tags$td(""),
+#                         tags$td('X (hold)'),
+#                         tags$td('--'),
+#                         tags$td('X')
+#                     ),
+#                     tags$tr(
+#                         tags$td(6),
+#                         tags$td(""),
+#                         tags$td('--'),
+#                         tags$td('--'),
+#                         tags$td('X')
+#                     ),
+#                     tags$tr(
+#                         tags$td(7),
+#                         tags$td(""),
+#                         tags$td('X (flip)'),
+#                         tags$td('X'),
+#                         tags$td('--')
+#                     ),
+#                     tags$tr(
+#                         tags$td(8),
+#                         tags$td(""),
+#                         tags$td('X (hold)'),
+#                         tags$td('X'),
+#                         tags$td('--')
+#                     ),
+#                     tags$tr(
+#                         tags$td(9),
+#                         tags$td(""),
+#                         tags$td('--'),
+#                         tags$td('X'),
+#                         tags$td('--')
+#                     ),
+#                     tags$tr(
+#                         tags$td(10),
+#                         tags$td(""),
+#                         tags$td('[state leg]'),
+#                         tags$td(''),
+#                         tags$td('')
+#                     ),
+#                     tags$tr(
+#                         tags$td(11),
+#                         tags$td(""),
+#                         tags$td('X (flip)'),
+#                         tags$td('--'),
+#                         tags$td('--')
+#                     ),
+#                     tags$tr(
+#                         tags$td(12),
+#                         tags$td(""),
+#                         tags$td('X (hold)'),
+#                         tags$td('--'),
+#                         tags$td('--')
+#                     ),
+#                     tags$tr(
+#                         tags$td(99),
+#                         tags$td(""),
+#                         tags$td('--'),
+#                         tags$td('--'),
+#                         tags$td('--')
+#                     )
+#          ),
+#          tags$p(""),
+#          tags$i("* X = seat is in play")
+# )
