@@ -50,11 +50,11 @@ shinyUI(
     
         #plot map and friendly/detailed view toggle
         mainPanel(
-            prettyRadioButtons("radio", label=NULL, inline=TRUE,
-                               choiceNames = list(tags$strong(style = 'color:silver','FRIENDLY VIEW'), tags$strong(style = 'color:silver','DETAILED VIEW')  ), 
-                               choiceValues = list( 'friendly', 'detailed'),
-                               selected = 'friendly',
-                               shape = 'curve'),
+            #prettyRadioButtons("radio", label=NULL, inline=TRUE,
+            #                   choiceNames = list(tags$strong(style = 'color:silver','FRIENDLY VIEW'), tags$strong(style = 'color:silver','DETAILED VIEW')  ), 
+            #                   choiceValues = list( 'friendly', 'detailed'),
+            #                   selected = 'friendly',
+            #                   shape = 'curve'),
             leafletOutput("usmap", height = 500) #,
             
             # #display links to data sources below map (currently display in the map attributions instead)
