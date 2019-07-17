@@ -22,9 +22,11 @@ shinyServer(function(input, output, session) {
     observeEvent(input$reset, {
         updateTextInput(session, "zipcode", value = "")
         updateSliderInput(session, "miles", value = mileSliderMin)
+        leafletProxy("usmap") %>% fitBounds(-120, 25, -75, 50) #contiguous 48
         v$clickedIdPrev <- v$clickedIdNew #set v$clickedIdPrev so it is removed from map
         v$clickedIdNew <- vector()        #clear v$clickedIdNew so no new highlighting is added
         renderSelectionOnMap()            #allow function to render the new clickedIdPrev/clickedIdNew values
+        v$strEventSignupUrl <- 'https://www.mobilize.us/ft6/'
     })
 
     #---- DEFINE REACTIVE VALUES ----
@@ -33,8 +35,20 @@ shinyServer(function(input, output, session) {
     v <- shiny::reactiveValues(clickedIdNew = vector(),  #store the geoid of the district currently selected by the user 
                                clickedIdPrev = vector(), #store the geoid of the district previously selected by the user in order to reset it to the original map formatting
                                dfDistrictsDatatableFiltered = data.frame(), #store the datatable data as filtered by the current userMiles 
-                               userMiles = NULL #store the current value of userMiles
-                               )
+                               userMiles = NULL, #store the current value of userMiles
+                               strEventSignupUrl = 'https://www.mobilize.us/ft6/', #store the event signup url based on user zipcode
+                               validZipcode = 0 #keep track of whether the current zipcode is valid
+    )
+    
+    #check validity of user's zipcode
+    observeEvent(input$zipcode,{
+        zipcodeInfo <- subset(zipcode,zip==input$zipcode)
+        if(nrow(zipcodeInfo) != 0)
+          v$validZipcode <- 1
+        else
+          v$validZipcode <- 0
+      
+    })
     
     #---- HANDLE MAP+TABLE DISTRICT SELECTION ----
     
@@ -44,11 +58,11 @@ shinyServer(function(input, output, session) {
         click <- input$usmap_shape_click  #grab new click info
         geoid <- click$id                 #grab geoid of new clicked district
         v$clickedIdNew <- geoid           #redefine currently clicked district 
-        #print('map click:')
-        #print(geoid)
-        
+        print('map click:')
+        print(geoid)
+
         #if the table is being displayed, check whether we need to adjust the data bounds 
-        if(input$zipcode != '') {
+        if(v$validZipcode == 1) {
             g <- count(subset(v$dfDistrictsDatatableFiltered, GEOID==geoid)) #identify whether clicked geoid is in the current datatable display
             if(g == 0) {
                 #districtDistances holds GEOID and miles from zip
@@ -95,18 +109,6 @@ shinyServer(function(input, output, session) {
     
     #---- BUILD DATATABLE DATAFRAME BASED ON ZIPCODE ----
     
-    #save userZipcode as reactive object with error handling
-    userZipcode <- reactive({
-        #validate(
-        #    need(input$zipcode != "", "Get started by entering your zipcode! The map will take a few moments to load. You rock!")
-        #)
-        if (input$zipcode == "")
-            userZipcode <- 66952 #center of the continguous US
-        else
-            userZipcode <- input$zipcode
-        
-    })
-    
     #update userMiles reactive value
     observeEvent({input$radio
                   input$miles
@@ -117,20 +119,13 @@ shinyServer(function(input, output, session) {
         #else let v$userMiles remain the true value 
     })
     
+    
     #convert user zipcode to lat long
     userLatLong <- reactive({
         
-        zipcodeInfo <- subset(zipcode,zip==userZipcode())
-        
-        #check validity of user's zipcode
-        validate(
-            #need(nrow(zipcodeInfo) != 0, "Invalid US zipcode. Please enter valid zipcode.")
-            need(nrow(zipcodeInfo) != 0, "") #need valid zipcode
-
-        )
-        
-        #get latlong of user's zipcode
-        userLatLong = cbind(as.numeric(zipcodeInfo['latitude']), as.numeric(zipcodeInfo['longitude']))
+        if(v$validZipcode == 1)
+          zipcodeInfo <- subset(zipcode,zip==input$zipcode) #get info from database
+          userLatLong = cbind(as.numeric(zipcodeInfo['latitude']), as.numeric(zipcodeInfo['longitude']))
 
     })
     
@@ -170,22 +165,6 @@ shinyServer(function(input, output, session) {
         dfDistrictsUser <- merge(dfDistricts, districtDistances, by='GEOID')
     })
     
-    #adjust zoom of map to include all districts within user specified range
-    mapBounds <- reactive({
-        
-        #grab subset of polygons that are currently with user's mile range
-        districtPolygonsInRadius <- subset(dfDistrictsUser(), as.numeric(USERDIST) <= v$userMiles)
-        
-        #add the district in which their lat lon exists
-        longitudes = as.numeric(levels(districtPolygonsInRadius$INTPTLON)[districtPolygonsInRadius$INTPTLON])
-        latitudes = as.numeric(levels(districtPolygonsInRadius$INTPTLAT)[districtPolygonsInRadius$INTPTLAT])
-        minLng <- min(longitudes[longitudes<0]) # there are some rogue weird ones in there possible from type conversion or non-states
-        maxLng <- max(longitudes[longitudes<0])
-        minLat <- min(latitudes[latitudes>0])
-        maxLat <- max(latitudes[latitudes>0])
-        mapBounds <- data.frame(MINLNG=minLng, MAXLNG=maxLng, MINLAT=minLat, MAXLAT=maxLat)
-    })
-    
     #select subset of columns to be shown in datatable, rename some for readability
     #NOTE: restriction based on user's mile range happens in an observeEvent and is saves in a reactive value
     dfDistrictsDatatable <- reactive( {
@@ -215,7 +194,9 @@ shinyServer(function(input, output, session) {
     observeEvent({input$zipcode
                     input$miles
                     input$radio} , {
-            v$dfDistrictsDatatableFiltered <- subset(dfDistrictsDatatable(), as.numeric(MilesFromZip) <= v$userMiles)
+            
+            if(v$validZipcode == 1) 
+              v$dfDistrictsDatatableFiltered <- subset(dfDistrictsDatatable(), as.numeric(MilesFromZip) <= v$userMiles)
     })
     
     #---- BUILD DATATABLE OUTPUT ----
@@ -224,8 +205,8 @@ shinyServer(function(input, output, session) {
     #NOTE: friendly/detailed views originate from the same data, only difference in rendering is the number of columns displayed
     output$datatable <- DT::renderDataTable({
         validate(
-            need(input$zipcode != "", ""),
-            need(length(v$dfDistrictsDatatableFiltered) != 0, "")
+            need(length(v$dfDistrictsDatatableFiltered) != 0, ""),
+            need(v$validZipcode == 1, "")
         )
         df <- v$dfDistrictsDatatableFiltered 
         if(input$radio == 'friendly') {
@@ -340,7 +321,13 @@ shinyServer(function(input, output, session) {
 
         #create the map using openstreet map and set the initial view
         m <- leaflet(data = df) %>%
-                        addTiles() %>%
+                        addTiles() %>% #includes the default attributions
+                        addTiles(attribution = paste("| <a href=\"https://catalog.data.gov/harvest/116th-congressional-district\">District Map Data</a>",
+                                                     "| <a href=\"http://clerk.house.gov/member_info/\">House Data</a>",
+                                                     "| <a href=\"https://www.senate.gov/general/contact_information/senators_cfm.cfm\">Senate Data</a>",
+                                                     "| Priority analysis by Jason Berlin")
+                        ) %>%
+                        fitBounds(-120, 25, -75, 50) %>% #contiguous 48
                         addPolygons(layerId=~GEOID, #layerId is returned during a click event
                                     
                                     #set style of polygons
@@ -364,7 +351,8 @@ shinyServer(function(input, output, session) {
                                     ) %>%
                         
                         #addLegend("bottomright", pal = pal, values = c(1,2,3,4,5,6,7,8,9,10,11,12), title = "Target Class", opacity = 0.3)   
-                        addLegend("bottomright", pal = pal, values = c('HIGHEST','HIGHER','HIGH' ), title = "PRIORITY", opacity = 0.3)  
+                        addLegend("bottomright", pal = pal, values = c('HIGHEST','HIGHER','HIGH' ), title = "PRIORITY", opacity = 0.3)
+                        
     })
     
     #add a marker to represent the user's location when they specify a zipcode
@@ -372,10 +360,10 @@ shinyServer(function(input, output, session) {
         leafletProxy("usmap") %>%
             clearMarkers()
         
-        if (input$zipcode != '') {
+        if (v$validZipcode == 1) {
             leafletProxy("usmap") %>% 
                 addMarkers(lng = userLatLong()[2], lat = userLatLong()[1], 
-                           label = paste('zipcode ',userZipcode()),
+                           label = paste('zipcode ',input$zipcode),
                            labelOptions = labelOptions(
                                style = list("font-weight" = "bold", padding = "3px 8px", color = strColorDemocrat),
                                textsize = "13px",
@@ -388,11 +376,12 @@ shinyServer(function(input, output, session) {
     observeEvent({input$miles
                   input$zipcode}, {
         #if user has hit the rest button or if it is the beginning of a session      
-        if (input$zipcode == "") {
+        if (v$validZipcode == 0) {
             leafletProxy("usmap") %>% 
                 fitBounds(-120, 25, -75, 50) #contiguous 48
         #if user has chosen a zipcode and a radius    
         } else {
+            #redefine map bounds
             districtPolygonsInRadius <- subset(dfDistrictsUser(), as.numeric(USERDIST) <= v$userMiles)
             longitudes = as.numeric(levels(districtPolygonsInRadius$INTPTLON)[districtPolygonsInRadius$INTPTLON])
             latitudes = as.numeric(levels(districtPolygonsInRadius$INTPTLAT)[districtPolygonsInRadius$INTPTLAT])
@@ -407,13 +396,22 @@ shinyServer(function(input, output, session) {
     
     #---- BUILD SIDEBAR DISTRICT INFO ----
     
+    #adjust the event url based on zipcode, if available, otherwise maintain general link
+    observeEvent({input$usmap_shape_click
+                  input$zipcode}, {
+        if(v$validZipcode == 0)
+          v$strEventSignupUrl <- 'https://www.mobilize.us/ft6/' #general link
+        else
+          v$strEventSignupUrl <- paste('https://www.mobilize.us/ft6/', '?address=', input$zipcode, sep='') #user location specific link
+    })
+    
     #create info to be displayed on sidebar when user clicks on a district
     output$clickedDistrictInfo <- renderPrint({ #renderPrint
         #tags$p(style='font-size: 10px', '')
         validate(
             need(length(v$clickedIdNew) > 0, 'Click on any district for more info!')
         )
-        
+
         #grab geoid of current polygon selection
         geoid <- v$clickedIdNew
         #save district info in temp dataframe based on user click
@@ -443,10 +441,6 @@ shinyServer(function(input, output, session) {
         
         #strBorderStyle = paste('; border:2px; border-style:solid; border-color:' , strPriorityColor, '; padding: 0.3em; background:white')
         strBackgroundStyle = paste(';background-color:', strPriorityColor)
-        
-        #set event link based on zipcode if user has entered a zipcode
-        strEventSignupFilter = if (input$zipcode == '') '' else paste('?address=', userZipcode(), sep='')
-        strEventSignupUrl = paste('https://www.mobilize.us/ft6/', strEventSignupFilter, sep='')
         
         #define action words based on whether 
         tags$div(class="header", checked=NA,
@@ -555,13 +549,14 @@ shinyServer(function(input, output, session) {
                      
                      #link to event signup
                      tags$hr() ,
-                     tags$a(style='font-size: 17px; font-weight:bold', href=strEventSignupUrl, target="_blank" , "Click here to find or host an event!")
+                     tags$a(style='font-size: 17px; font-weight:bold', href=v$strEventSignupUrl, target="_blank" , "Click here to find or host an event!")
                      
                  ) #end of list in div tag
                  
         ) #end of sidebar html
         
     })
+    
     
     #---- RENDER SELECTION FUNCTIONS ----
     

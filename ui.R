@@ -27,11 +27,6 @@ shinyUI(
         #set background color of entire page
         setBackgroundColor(strFieldTeam6Webpage),
         
-        #make the map tabs show up on the righthand side of the page
-        #tags$head(
-        #    tags$style(HTML(".tabbable ul li { float: right; }"))
-        #),
-        
         #plot sidebar 
         sidebarPanel(
             textInput("zipcode",
@@ -39,12 +34,16 @@ shinyUI(
             ),
             sliderInput("miles",
                         "Choose your travel range (miles):",
-                        #Filter table by proximity (miles):",
                         min = mileSliderMin,
                         max = mileSliderMax,
                         value = mileSliderMin
             ),
-            actionButton("reset", tags$strong(style='color:grey',"Reset"), style='width:100%'),
+            tags$div(style="display:inline-block; width:100%",
+                    fluidRow(
+                        #column(6, actionButton("go", tags$strong(style=paste('color:', strColorDemocrat ),"Go"), style='width:100%')), #not build
+                        column(12, actionButton("reset", tags$strong(style='color:silver',"Reset"), style='width:100%'))
+                    )
+            ),
             tags$p(""),
             htmlOutput('clickedDistrictInfo')
         ),
@@ -56,7 +55,21 @@ shinyUI(
                                choiceValues = list( 'friendly', 'detailed'),
                                selected = 'friendly',
                                shape = 'curve'),
-            leafletOutput("usmap", height = 500)
+            leafletOutput("usmap", height = 500) #,
+            
+            # #display links to data sources below map (currently display in the map attributions instead)
+            # tags$div(class="p", style='font-size:9px', checked=NA,
+            #          tags$a(href="https://catalog.data.gov/harvest/116th-congressional-district", "Congressional District Map Data"),
+            #          tags$span(style='color:silver',"|"),
+            #          tags$a(href="http://clerk.house.gov/member_info/", "House Member Data"),
+            #          tags$span(style='color:silver',"|"),
+            #          tags$a(href="https://www.senate.gov/general/contact_information/senators_cfm.cfm", "Senate Member Data"),
+            #          tags$span(style='color:silver',"|"),
+            #          tags$span(style='color:grey', "Priority analysis by Jason Berlin"),
+            #          #tags$p(style='color:lightgrey', 'We apologize for bugs and appreciate your patience while this tool is still in development mode... improvements will occur regularly!')
+            #          tags$br(),
+            #          tags$br()
+            # )
         ),
         
         #plot data table
@@ -64,22 +77,6 @@ shinyUI(
             column(12, #table width (full width = 12)
                    dataTableOutput('datatable')
             )
-        ),
-        
-        #display links to data sources
-        tags$div(class="p", checked=NA,
-                 tags$br(),
-                 tags$span(style='color:silver;font-weight:bold',"SOURCES "),
-                 tags$a(href="https://catalog.data.gov/harvest/116th-congressional-district", "Congressional District Map Data"),
-                 tags$span(style='color:silver',"|"),
-                 tags$a(href="http://clerk.house.gov/member_info/", "House of Representatives Member Data"),
-                 tags$span(style='color:silver',"|"),
-                 tags$a(href="https://www.senate.gov/general/contact_information/senators_cfm.cfm", "Senate Member Data"),
-                 tags$span(style='color:silver',"|"),
-                 tags$span(style='color:grey', "District priority analysis performed by Jason Berlin"),
-                 #tags$p(style='color:lightgrey', 'We apologize for bugs and appreciate your patience while this tool is still in development mode... improvements will occur regularly!')
-                 tags$br(),
-                 tags$br()
         )
     
     ) #end of fluidPage
