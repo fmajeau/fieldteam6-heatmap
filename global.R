@@ -16,6 +16,9 @@ library(dplyr)        #didn't end up using this
 #access the zipcode database in the 'zipcode' package
 data(zipcode)
 
+#viewing mode (non-interactive replacement for input$radio)
+strViewingMode = 'friendly'
+
 #constants
 kmPerMile = 1.60934  # [km] / [mi]
 kmPerDegree = 111.1    # [km] / [lat/long degree]
