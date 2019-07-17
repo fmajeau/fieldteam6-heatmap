@@ -110,8 +110,7 @@ shinyServer(function(input, output, session) {
     #---- BUILD DATATABLE DATAFRAME BASED ON ZIPCODE ----
     
     #update userMiles reactive value
-    observeEvent({input$radio
-                  input$miles
+    observeEvent({input$miles
                   input$zipcode},{
         #if (1) it is the beginning of a session i.e. null OR (2) everything is still below mileSliderMax OR (3) input miles is under max value
         if (is.null(v$userMiles) || (v$userMiles <= mileSliderMax & input$miles == mileSliderMax) || input$miles < mileSliderMax)
@@ -192,8 +191,7 @@ shinyServer(function(input, output, session) {
 
     #restrict datatable based on the user's selected mile range whenever new user inputs are set
     observeEvent({input$zipcode
-                    input$miles
-                    input$radio} , {
+                    input$miles} , {
             
             if(v$validZipcode == 1) 
               v$dfDistrictsDatatableFiltered <- subset(dfDistrictsDatatable(), as.numeric(MilesFromZip) <= v$userMiles)
@@ -209,7 +207,7 @@ shinyServer(function(input, output, session) {
             need(v$validZipcode == 1, "")
         )
         df <- v$dfDistrictsDatatableFiltered 
-        if(input$radio == 'friendly') {
+        if(strViewingMode == 'friendly') {
             #FRIENDLY VIEW (District, Priority, MilesFromZip)
             d <- DT::datatable(df,   
                                selection = 'single', #only allow one row selection at a time
@@ -514,7 +512,7 @@ shinyServer(function(input, output, session) {
                      ),
                      
                      #description of priority or target class
-                     if(input$radio == 'friendly') {
+                     if(strViewingMode == 'friendly') {
                          tags$br() %>%
                              #tags$strong(strPriorityDesc) 
                              tags$strong(strFriendlyClassDesc) 
