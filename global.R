@@ -69,7 +69,10 @@ strClassDescriptionsFriendly[10] <- ''
 strClassDescriptionsFriendly[11] <- paste(strIntro, strHouseFlip,  '.', sep = '')
 strClassDescriptionsFriendly[12] <- paste(strIntro, strHouseHold,  '.', sep = '')
 strClassDescriptionsFriendly[99] <- 'Registering democrats is unlikely to affect elections in this area.'
-
+#trying to get the descriptions to always take up the same amount of space, but struggled to get it to work
+#intMaxStrLength = max(stringr::str_length(strClassDescriptionsFriendly[!is.na(strClassDescriptionsFriendly)]))
+#strClassDescriptionsFriendly <- stringr::str_pad(strClassDescriptionsFriendly, intMaxStrLength, 'right', '9') 
+#strClassDescriptionsFriendly <- stringr::str_replace_all(strClassDescriptionsFriendly, '9', '&nbsp;') #strpad won't take pad of > 1 char
 
 #read in json file into a SpatialPolygonsDataFrame
 districtsDataFrameSimple <- rgdal::readOGR("tl_2018_us_cd116_simplified.json", verbose = TRUE) #returns a SpatialPolygonsDataFrame
