@@ -21,7 +21,7 @@ kmPerMile = 1.60934  # [km] / [mi]
 kmPerDegree = 111.1    # [km] / [lat/long degree]
 milesPerDegree = kmPerDegree / kmPerMile
 mileSliderMin = 50
-mileSliderMax = 2000
+mileSliderMax = 1000
 
 #colors
 strColorRepublican  = '#8b0000' 
