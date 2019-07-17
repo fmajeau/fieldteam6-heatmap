@@ -58,8 +58,8 @@ shinyServer(function(input, output, session) {
         click <- input$usmap_shape_click  #grab new click info
         geoid <- click$id                 #grab geoid of new clicked district
         v$clickedIdNew <- geoid           #redefine currently clicked district 
-        print('map click:')
-        print(geoid)
+        #print('map click:')
+        #print(geoid)
 
         #if the table is being displayed, check whether we need to adjust the data bounds 
         if(v$validZipcode == 1) {
@@ -69,18 +69,20 @@ shinyServer(function(input, output, session) {
                 #use that to find new miles input range so the clicked district shows up in the table
                 userMilesNew <- subset(dfDistrictsUser(),GEOID==geoid)$USERDIST
                 
-                #only rebuild the table if you're expanding the scope
-                if(userMilesNew > v$userMiles) {
+                #only rebuild the table if you're expanding the scope (if not already at max & if clicked district increases the range)
+                if(v$userMiles < mileSliderMax & userMilesNew > v$userMiles) {
                     if(userMilesNew >= mileSliderMax) 
-                        userMilesSlider <- mileSliderMax
+                        #userMilesSlider <- mileSliderMax
+                        v$userMiles <- mileSliderMax
                     else
-                        userMilesSlider <- userMilesNew
-                    v$userMiles <- userMilesNew
-                    updateSliderInput(session, "miles", value = userMilesSlider)
+                        #userMilesSlider <- userMilesNew
+                        v$userMiles <- userMilesNew
+                    #v$userMiles <- userMilesNew
+                    updateSliderInput(session, "miles", value = v$userMiles)
                     #update the filter of the datatable based on the expanded zoom 
                     #-- need to do this here because the normal observeEvent will not update the datatable before we need to select the
                     #   row using renderSelectionInTable() -- this is the reason the datatable data needs to be a reactive value
-                    v$dfDistrictsDatatableFiltered <- subset(dfDistrictsDatatable(), as.numeric(MilesFromZip) <= userMilesNew)
+                    v$dfDistrictsDatatableFiltered <- subset(dfDistrictsDatatable(), as.numeric(MilesFromZip) <= v$userMiles)
                 }
                 
             }
@@ -117,6 +119,7 @@ shinyServer(function(input, output, session) {
         if (is.null(v$userMiles) || (v$userMiles <= mileSliderMax & input$miles == mileSliderMax) || input$miles < mileSliderMax)
             v$userMiles <- input$miles
         #else let v$userMiles remain the true value 
+        
     })
     
     
@@ -656,7 +659,6 @@ shinyServer(function(input, output, session) {
             clickedRow <- labeledTableInfo[labeledTableInfo$GEOID==geoid, ]
             rowNumber <- clickedRow$ROWNUMBER
 
-            #rowNumber <- as.integer(row(clickedRow))
             if (length(rowNumber) == 0) print('That district is not within the range you specified ')
 
             tableProxy %>% DT::selectRows(as.numeric(rowNumber)) #%>%
