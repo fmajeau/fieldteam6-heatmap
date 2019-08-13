@@ -29,6 +29,7 @@ shinyUI(
         
         #plot sidebar 
         sidebarPanel(
+            width = 4,
             textInput("zipcode",
                        "Enter your zipcode:"
             ),
@@ -50,6 +51,7 @@ shinyUI(
     
         #plot map and friendly/detailed view toggle
         mainPanel(
+            width = 8,
             #prettyRadioButtons("radio", label=NULL, inline=TRUE,
             #                   choiceNames = list(tags$strong(style = 'color:silver','FRIENDLY VIEW'), tags$strong(style = 'color:silver','DETAILED VIEW')  ), 
             #                   choiceValues = list( 'friendly', 'detailed'),
@@ -78,8 +80,29 @@ shinyUI(
                    dataTableOutput('datatable')
             )
         )
+        # #retain connection with websocket
+        # #from https://github.com/virtualstaticvoid/heroku-buildpack-r/issues/97
+        # tags$head(
+        #     HTML(
+        #         "<script>
+        #         var socket_timeout_interval
+        #         var n = 0
+        #         $(document).on('shiny:connected', function(event) {
+        #             socket_timeout_interval = setInterval(function(){
+        #                 Shiny.onInputChange('count', n++)
+        #                 }, 15000)
+        #             alert(event.socket.readyState)
+        #         });
+        #         $(document).on('shiny:disconnected', function(event) {
+        #             clearInterval(socket_timeout_interval)
+        #         });
+        #     </script>"
+        #     )
+        # )
     
     ) #end of fluidPage
+    
+    
             
 ) #end of shinyUI
 

@@ -109,6 +109,7 @@ shinyServer(function(input, output, session) {
         
     })
     
+    
     #---- BUILD DATATABLE DATAFRAME BASED ON ZIPCODE ----
     
     #update userMiles reactive value
@@ -123,19 +124,29 @@ shinyServer(function(input, output, session) {
     
     
     #convert user zipcode to lat long
-    userLatLong <- reactive({
-        
-        if(v$validZipcode == 1)
-          zipcodeInfo <- subset(zipcode,zip==input$zipcode) #get info from database
-          userLatLong = cbind(as.numeric(zipcodeInfo['latitude']), as.numeric(zipcodeInfo['longitude']))
-
-    })
+    #userLatLong <- reactive({
+    #    if(v$validZipcode == 1)
+    #      zipcodeInfo <- subset(zipcode,zip==input$zipcode) #get info from database
+    #      userLatLong = cbind(as.numeric(zipcodeInfo['latitude']), as.numeric(zipcodeInfo['longitude']))
+    #})
     
     #calculate distance between user's zipcode and each district
     dfDistrictsUser <- reactive({
       
+        validate(
+          need(v$validZipcode == 1, "")
+        )
+      
+        zipcodeInfo <- subset(zipcode,zip==input$zipcode) #get info from database
+        
+        validate(
+          need(nrow(zipcodeInfo) != 0,'')
+            
+        )
+        userLatLong <- cbind(as.numeric(zipcodeInfo['latitude']), as.numeric(zipcodeInfo['longitude']))
+      
         #use nearest neighbor search to find distance between lat/long of user and lat/long of each district centroid
-        nearest <- RANN::nn2(dfDistrictCentroids[,c('INTPTLAT','INTPTLON')], userLatLong(), k=nrow(dfDistrictCentroids)) 
+        nearest <- RANN::nn2(dfDistrictCentroids[,c('INTPTLAT','INTPTLON')], userLatLong, k=nrow(dfDistrictCentroids)) 
         
         #create dataframe of districtDistrances which will eventually be merged with the districts dataframe
         distances = round(nearest$nn.dists[1,] * milesPerDegree, 0) #convert from degrees to miles
@@ -146,7 +157,7 @@ shinyServer(function(input, output, session) {
         
         #if a user's district is large, it is possible the centroid of their district is too far from their zipcode for the district 
         #to be included in even the smallest specified range. set the user's district to be 0 miles away to ensure it is always included. 
-        userLocation <- data.frame(Longitude = c(userLatLong()[1,2]), Latitude =c(userLatLong()[1,1]) )
+        userLocation <- data.frame(Longitude = c(userLatLong[1,2]), Latitude =c(userLatLong[1,1]) )
         #userLocation <- data.frame(Longitude = c(2.220551), Latitude =c(48.809509) ) #TESTING
         coordinates(userLocation) <- ~ Longitude + Latitude
         dfDistrictsTemp <- dfDistricts
@@ -171,7 +182,7 @@ shinyServer(function(input, output, session) {
     #NOTE: restriction based on user's mile range happens in an observeEvent and is saves in a reactive value
     dfDistrictsDatatable <- reactive( {
         validate(
-            need(input$zipcode != "", "")
+            need(v$validZipcode == 1, "")
         )
         dfDistrictsDatatable <- data.frame(District=dfDistrictsUser()$DISTRICT,
                                         Priority=dfDistrictsUser()$PRIORITY,
@@ -196,8 +207,13 @@ shinyServer(function(input, output, session) {
     observeEvent({input$zipcode
                     input$miles} , {
             
-            if(v$validZipcode == 1) 
+            if(v$validZipcode == 1) {
               v$dfDistrictsDatatableFiltered <- subset(dfDistrictsDatatable(), as.numeric(MilesFromZip) <= v$userMiles)
+              renderSelectionInTable() 
+              #if the user adjusts the mileage range, the table will redraw itself to display the correct entries
+              #so we need to select the district in the table
+            }
+              
     })
     
     #---- BUILD DATATABLE OUTPUT ----
@@ -305,7 +321,7 @@ shinyServer(function(input, output, session) {
                     color = styleEqual(c('blue','red','grey'), c(strColorDemocrat, strColorRepublican, 'grey'))
                 ) 
         }
-        
+
         
     })
     
@@ -362,8 +378,10 @@ shinyServer(function(input, output, session) {
             clearMarkers()
         
         if (v$validZipcode == 1) {
+            zipcodeInfo <- subset(zipcode,zip==input$zipcode) #get info from database
+            userLatLong = cbind(as.numeric(zipcodeInfo['latitude']), as.numeric(zipcodeInfo['longitude']))
             leafletProxy("usmap") %>% 
-                addMarkers(lng = userLatLong()[2], lat = userLatLong()[1], 
+                addMarkers(lng = userLatLong[2], lat = userLatLong[1], 
                            label = paste('zipcode ',input$zipcode),
                            labelOptions = labelOptions(
                                style = list("font-weight" = "bold", padding = "3px 8px", color = strColorDemocrat),
@@ -422,6 +440,10 @@ shinyServer(function(input, output, session) {
         strHouseColor <- if(grepl('BOOT', df$MISSION_HOUSE)) { strColorRepublican } else { strColorDemocrat }
         strSenateColor <- if(grepl('BOOT', df$MISSION_SENATE)) { strColorRepublican } else { strColorDemocrat }
         strPresidencyColor <- strColorRepublican
+        
+        #we want the democratic candidates to win the special elections
+        strHouseColor <- if(grepl('Special Election', df$MISSION_HOUSE)) { strColorDemocrat } else { strHouseColor }
+        
         
         #set priority color based on priority class of district
         strPriorityColor <- switch(as.character((df$PRIORITY)),
@@ -499,18 +521,18 @@ shinyServer(function(input, output, session) {
                      tags$table(style = "padding: 25%; width: 100%;",
                                 #row 1 of 3 (house)
                                 tags$tr(
-                                    tags$td(style='padding-left:4%; padding-right:4%; padding-top:0.4em',tags$strong(style='color:grey; font-style:italic', 'HOUSE ')),
-                                    tags$td(tags$strong(style=paste('color:', strHouseColor, ';padding-right: 5%'), df$MISSION_HOUSE))
+                                    tags$td(style='padding-left:3%; padding-right:2%; padding-top:0.3em',tags$i(style='color:grey; font-style:italic', 'HOUSE ')),
+                                    tags$td(style='padding-left:2%; padding-right:2%; padding-top:0.3em',tags$strong(style=paste('color:', strHouseColor), df$MISSION_HOUSE))
                                 ),
                                 #row 2 of 3 (senate)
                                 tags$tr(
-                                    tags$td(style='padding-left:4%; padding-right:4%; padding-top:0.4em',tags$strong(style='color:grey; font-style:italic', 'SENATE ')),
-                                    tags$td(tags$strong(style=paste('color:', strSenateColor, ';padding-right: 5%'), df$MISSION_SENATE))
+                                    tags$td(style='padding-left:3%; padding-right:2%; padding-top:0.3em',tags$i(style='color:grey; font-style:italic', 'SENATE ')),
+                                    tags$td(style='padding-left:2%; padding-right:2%; padding-top:0.3em', tags$strong(style=paste('color:', strSenateColor), df$MISSION_SENATE))
                                 ),
                                 #row 3 of 3 (presidency)
                                 tags$tr(
-                                    tags$td(style='padding-left:4%; padding-right:4%; padding-top:0.4em',tags$strong(style='color:grey; font-style:italic', 'PRESIDENCY ')),
-                                    tags$td(tags$strong(style=paste('color:', strPresidencyColor, ';padding-right: 5%'), df$MISSION_PRESIDENCY))
+                                    tags$td(style='padding-left:3%; padding-right:2%; padding-top:0.3em',tags$i(style='color:grey; font-style:italic', 'PRESIDENT ')),
+                                    tags$td(style='padding-left:2%; padding-right:2%; padding-top:0.3em', tags$strong(style=paste('color:', strPresidencyColor), df$MISSION_PRESIDENCY))
                                 )
                      ),
                      
@@ -641,7 +663,7 @@ shinyServer(function(input, output, session) {
         
         #table will only be displayed if user has entered a zipcode
         validate(
-            need(input$zipcode != "", "")
+            need(v$validZipcode == 1, "")
         )
         
         #if a new geoid has been selected on the map, check if it is in the current display of table rows

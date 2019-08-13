@@ -9,7 +9,7 @@ library(stringr) #pad numbers
 #-----------------------------------------------------------------------------------------------------------------------------------------------
 
 #read in json file into a SpatialPolygonsDataFrame
-districtsDataFrame <- rgdal::readOGR("tl_2018_us_cd116.json", verbose = TRUE) #returns a SpatialPolygonsDataFrame
+districtsDataFrame <- rgdal::readOGR(dsn = path.expand("tl_2018_us_cd116.json"), verbose = TRUE) #returns a SpatialPolygonsDataFrame
 
 #notes about how to access things inside the dataframe
 #see https://gist.github.com/mbacou/5880859
@@ -18,8 +18,8 @@ districtsDataFrame <- rgdal::readOGR("tl_2018_us_cd116.json", verbose = TRUE) #r
 
 #simplify the polygons from the original json file so they load much faster in the viewer
 #--takes SpatialPolygonsDataframe object
-#--tol of 0.01 seems to reduce number of coords to less than 1%
-districtsPolygonsSimple = rgeos::gSimplify(districtsDataFrame, 0.007, topologyPreserve = TRUE) 
+#--tol of 0.01 seems to reduce number of coords to less than 1% 0.007
+districtsPolygonsSimple = rgeos::gSimplify(districtsDataFrame, 0.006, topologyPreserve = TRUE) 
 
 #save the simplified polygons in a dataframe for use by leaflet
 #will be in the same order, according to documentation, unless a whole polygon is dropped
@@ -49,10 +49,10 @@ districtsRepInfo$PARTY_HOUSE <- districtsRepInfo$Party #rename to all caps to fi
 districtsRepInfo$DISTRICT <- paste(districtsRepInfo$STATEPOSTAL, districtsRepInfo$CD116FP, sep='-') #create readable district label 
 
 #fix NC-03, NC-09, PA-12
-districtsRepInfo$NAME_HOUSE[districtsRepInfo$DISTRICT=='NC-03'] <- "Vacant (Special Election Sept 10, 2019)"
-districtsRepInfo$PARTY_HOUSE[districtsRepInfo$DISTRICT=='NC-03'] <- "R"
-districtsRepInfo$NAME_HOUSE[districtsRepInfo$DISTRICT=='NC-09'] <- "Vacant (Special Election Sept 10, 2019)"
-districtsRepInfo$PARTY_HOUSE[districtsRepInfo$DISTRICT=='NC-09'] <- "R"
+districtsRepInfo$NAME_HOUSE[districtsRepInfo$DISTRICT=='NC-03'] <- "Allen Thomas [Special Election]" #Sept 10th 2019
+districtsRepInfo$PARTY_HOUSE[districtsRepInfo$DISTRICT=='NC-03'] <- "D"
+districtsRepInfo$NAME_HOUSE[districtsRepInfo$DISTRICT=='NC-09'] <- "Dan McCready [Special Election]" #Sept 10th 2019
+districtsRepInfo$PARTY_HOUSE[districtsRepInfo$DISTRICT=='NC-09'] <- "D"
 districtsRepInfo$NAME_HOUSE[districtsRepInfo$DISTRICT=='PA-12'] <- "Fred Keller" #recently elected, not yet listed in clerk's office file
 districtsRepInfo$PARTY_HOUSE[districtsRepInfo$DISTRICT=='PA-12'] <- "R"
 
@@ -154,11 +154,18 @@ dfRepInfo$COLOR_PRESIDENCY[dfRepInfo$PRESIDENCYINPLAY==0] <- 'grey'
 #HOUSE -- add Field Team 6 mission based on whether the house seat is in play
 dfRepInfo$MISSION_HOUSE[dfRepInfo$HOUSEINPLAY==1 & dfRepInfo$PARTY_HOUSE=='R'] <- 'BOOT'
 dfRepInfo$MISSION_HOUSE[dfRepInfo$HOUSEINPLAY==1 & dfRepInfo$PARTY_HOUSE=='D'] <- 'PROTECT'
+dfRepInfo$MISSION_HOUSE[grepl('Special',dfRepInfo$NAME_HOUSE)] <- 'ELECT'
+
 dfRepInfo$MISSION_HOUSE <- apply(dfRepInfo, 1, 
                                  FUN = function(x) if(x['HOUSEINPLAY']==0) '' else paste(x['MISSION_HOUSE'], ' ', 
                                                                                          x['NAME_HOUSE'], 
                                                                                          ' (', x['PARTY_HOUSE'], ')', sep=''))
-
+#special treatment for special elections
+dfRepInfo$MISSION_HOUSE <- apply(dfRepInfo, 1, 
+                                 FUN = function(x) if(grepl('Special Election', x['NAME_HOUSE'])) paste('ELECT ', 
+                                                                                 x['NAME_HOUSE'], 
+                                                                                 ' (', x['PARTY_HOUSE'], ')', sep='') else x['MISSION_HOUSE'])
+                     
 #SENATE -- add Field Team 6 mission based on whether the senate seat is in play
 dfRepInfo$MISSION_SENATE <- ""
 dfRepInfo$MISSION_SENATE[dfRepInfo$SENATEINPLAY==1 & dfRepInfo$PARTY_SENATE.x=='R'] <- 'BOOT'

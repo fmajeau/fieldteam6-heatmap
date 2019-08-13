@@ -53,11 +53,11 @@ strClassDescriptions[11] = 'any district in play for the House (FLIP) – in a s
 strClassDescriptions[12] = 'any district in play for the House (HOLD) – in a state NOT in play for the Senate or Presidency.'
 
 #create friendly view class descriptions
-strIntro <- 'Every democrat you register in this district will help us ' 
-strHouseHold <- 'hold our house majority'
-strHouseFlip <- 'expand our house majority'
-strSenateFlip <- 'flip the senate' 
-strWhiteHouseFlip <- 'take back the white house'
+strIntro <- 'Every Democrat you register in this district will help us ' 
+strHouseHold <- 'hold our House majority'
+strHouseFlip <- 'expand our House majority'
+strSenateFlip <- 'flip the Senate' 
+strWhiteHouseFlip <- 'take back the White House'
 strClassDescriptionsFriendly <- ''
 strClassDescriptionsFriendly[1] <- paste(strIntro, strHouseFlip, ', ',strSenateFlip, ', and ', strWhiteHouseFlip, '.', sep = '')
 strClassDescriptionsFriendly[2] <- paste(strIntro, strHouseHold, ', ',strSenateFlip, ', and ', strWhiteHouseFlip,  '.', sep = '')
