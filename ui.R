@@ -29,29 +29,60 @@ shinyUI(
         
         #plot sidebar 
         sidebarPanel(
-            width = 4,
-            textInput("zipcode",
-                       "Enter your zipcode:"
-            ),
-            sliderInput("miles",
-                        "Choose your travel range (miles):",
-                        min = mileSliderMin,
-                        max = mileSliderMax,
-                        value = mileSliderMin
-            ),
+            width = 12,
             tags$div(style="display:inline-block; width:100%",
-                    fluidRow(
-                        #column(6, actionButton("go", tags$strong(style=paste('color:', strColorDemocrat ),"Go"), style='width:100%')), #not build
-                        column(12, actionButton("reset", tags$strong(style='color:silver',"Reset"), style='width:100%'))
-                    )
+                     fluidRow(
+                         column(3,
+                                textInput("zipcode",
+                                   "Enter your zipcode:"
+                                   )
+                                
+                                ),
+                         column(6,
+                                sliderInput("miles",
+                                     "Choose your travel range (miles):",
+                                     min = mileSliderMin,
+                                     max = mileSliderMax,
+                                     value = mileSliderMin
+                                     )
+                                ),
+                         column(3,
+                                tags$br(),
+                                actionButton("reset", tags$strong(style='color:silver',"Reset"), style='width:100%')
+                                )
+                         
+                     )
             ),
-            tags$p(""),
-            htmlOutput('clickedDistrictInfo')
+            # textInput("zipcode",
+            #            "Enter your zipcode:"
+            # ),
+            # sliderInput("miles",
+            #             "Choose your travel range (miles):",
+            #             min = mileSliderMin,
+            #             max = mileSliderMax,
+            #             value = mileSliderMin
+            # ),
+            #tags$div(style="display:inline-block; width:100%",
+            #        fluidRow(
+            #            #column(6, actionButton("go", tags$strong(style=paste('color:', strColorDemocrat ),"Go"), style='width:100%')), #not build
+            #            #column(12, actionButton("reset", tags$strong(style='color:silver',"Reset"), style='width:100%'))
+            #        )
+            #),
+            #tags$p(""),
+            htmlOutput('clickedDistrictInfoHeader'),
+            fluidRow(
+                column(6, 
+                       htmlOutput('clickedDistrictInfoMission')
+                ),
+                column(6,
+                       htmlOutput('clickedDistrictInfoDescription')
+                )
+            )
         ),
     
         #plot map and friendly/detailed view toggle
         mainPanel(
-            width = 8,
+            width = 12,
             #prettyRadioButtons("radio", label=NULL, inline=TRUE,
             #                   choiceNames = list(tags$strong(style = 'color:silver','FRIENDLY VIEW'), tags$strong(style = 'color:silver','DETAILED VIEW')  ), 
             #                   choiceValues = list( 'friendly', 'detailed'),

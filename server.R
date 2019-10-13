@@ -7,7 +7,6 @@
 #    http://shiny.rstudio.com/
 #
 
-
 #SUMMARY OF DATAFRAMES
 #dfDistricts --> all non-user specific information about each polygon/distric (full set of districts) *defined in global.R*
 #dfDistrictsUser --> includes miles between user zipcode and each polygon (full set of districts)
@@ -366,11 +365,12 @@ shinyServer(function(input, output, session) {
                                         textsize = "15px",
                                         direction = "auto")
                                     ) %>%
-                        
                         #addLegend("bottomright", pal = pal, values = c(1,2,3,4,5,6,7,8,9,10,11,12), title = "Target Class", opacity = 0.3)   
                         addLegend("bottomright", pal = pal, values = c('HIGHEST','HIGHER','HIGH' ), title = "PRIORITY", opacity = 0.3)
                         
+                        
     })
+
     
     #add a marker to represent the user's location when they specify a zipcode
     observeEvent({input$zipcode}, {
@@ -390,6 +390,8 @@ shinyServer(function(input, output, session) {
         } 
         
     })
+    
+    
 
     #change map zoom based on zipcode and miles specified without reloading the whole map
     observeEvent({input$miles
@@ -425,10 +427,107 @@ shinyServer(function(input, output, session) {
     })
     
     #create info to be displayed on sidebar when user clicks on a district
-    output$clickedDistrictInfo <- renderPrint({ #renderPrint
+    output$clickedDistrictInfoHeader <- renderPrint({ #renderPrint
+      #tags$p(style='font-size: 10px', '')
+      validate(
+        need(length(v$clickedIdNew) > 0, 'Click on any district for more info!')
+      )
+      
+      #grab geoid of current polygon selection
+      geoid <- v$clickedIdNew
+      #save district info in temp dataframe based on user click
+      df <- dfDistricts[dfDistricts@data$GEOID==geoid, ]
+      
+      #set color of candidate based on party (i.e. do we want to boot or protect)
+      strHouseColor <- if(grepl('BOOT', df$MISSION_HOUSE)) { strColorRepublican } else { strColorDemocrat }
+      strSenateColor <- if(grepl('BOOT', df$MISSION_SENATE)) { strColorRepublican } else { strColorDemocrat }
+      strPresidencyColor <- strColorRepublican
+      
+      #we want the democratic candidates to win the special elections
+      strHouseColor <- if(grepl('Special Election', df$MISSION_HOUSE)) { strColorDemocrat } else { strHouseColor }
+      
+      
+      #set priority color based on priority class of district
+      strPriorityColor <- switch(as.character((df$PRIORITY)),
+                                 'HIGHEST' = strColorHighest,
+                                 'HIGHER' = strColorHigher,
+                                 'HIGH' = strColorHigh)
+      strPriorityColor <- if(df$PRIORITY=='') { strColorNone } else { strPriorityColor }
+      
+      #set priority description (text displayed under mission if friendly view)
+      #REPLACED WITH strClassDescFriendly
+      ##strPriorityDesc = if (df$PRIORITY=='') strPriorityDescriptions['NOT PRIORITIZED'] else strPriorityDescriptions[as.character(df$PRIORITY)]
+      
+      #set target class description (text displayed under mission if detailed view)
+      strClassDesc = if(df$TARGETCLASS==99) '' else paste('This class includes ', strClassDescriptions[as.numeric(df$TARGETCLASS)])
+      
+      #set target class description (text displayed under mission if detailed view)
+      strFriendlyClassDesc = strClassDescriptionsFriendly[as.numeric(df$TARGETCLASS)]
+      
+      #strBorderStyle = paste('; border:2px; border-style:solid; border-color:' , strPriorityColor, '; padding: 0.3em; background:white')
+      strBackgroundStyle = paste(';background-color:', strPriorityColor)
+      
+      #define action words based on whether 
+      tags$div(class="header", checked=NA,
+               
+               list(
+                 #tags$hr(),
+                 tags$p(style='font-size: 10px', ''),
+                 tags$table(style = "padding: 25%; width: 100%",
+                            #1st and only row in this "table"
+                            tags$tr(style='align:center',
+                                    #column 1 (district)
+                                    tags$td(style=paste('width:65%; align:center; padding:0.2em; border:4px; border-style:solid; border-color:', strPriorityColor),
+                                            tags$strong(style='font-size: 30px; padding:0.5em', as.character(df$DISTRICT))),
+                                    #column 2 (list of priorities)
+                                    tags$td(style='width:35%;align:center',
+                                            tags$table(style='padding:5%',
+                                                       #row 1 of 4 (highest)
+                                                       tags$tr(
+                                                         tags$td(
+                                                           style=paste('width:50%;align:center;padding:0.2em', if(strColorHighest==strPriorityColor) {strBackgroundStyle}), 
+                                                           tags$strong(style=paste('font-size:12px;color:', if(strColorHighest==strPriorityColor)  {'white'} else {strColorHighest}), 'HIGHEST PRIORITY')
+                                                         )
+                                                       ),
+                                                       #row 2 of 4 (higher)
+                                                       tags$tr(
+                                                         tags$td(
+                                                           style=paste('width:50%;align:center;padding:0.2em', if(strColorHigher==strPriorityColor) {strBackgroundStyle}), 
+                                                           tags$strong(style=paste('font-size:12px;color:', if(strColorHigher==strPriorityColor)  {'white'} else {strColorHigher}), 'HIGHER PRIORITY')
+                                                         )
+                                                       ),
+                                                       #row 3 of 4 (high)
+                                                       tags$tr(
+                                                         tags$td(
+                                                           style=paste('width:50%;align:center;padding:0.2em', if(strColorHigh==strPriorityColor) {strBackgroundStyle}), 
+                                                           tags$strong(style=paste('font-size:12px;color:', if(strColorHigh==strPriorityColor)  {'white'} else {strColorHigh}), 'HIGH PRIORITY')
+                                                         )
+                                                       ),
+                                                       #row 4 of 4 (not prioritized)
+                                                       tags$tr(
+                                                         tags$td(
+                                                           style=paste('width:50%;align:center;padding:0.2em', if(strColorNone==strPriorityColor) {strBackgroundStyle}), 
+                                                           tags$strong(style=paste('font-size:12px;color:', if(strColorNone==strPriorityColor)  {'white'} else {strColorNone}), 'NOT PRIORITIZED')
+                                                         )
+                                                       )
+                                            )
+                                    )
+                                    
+                            )
+                            
+                 )
+                 
+               ) #end of list in div tag
+               
+      ) #end of sidebar html
+      
+    })
+    
+    #create info to be displayed on sidebar when user clicks on a district
+    output$clickedDistrictInfoMission <- renderPrint({ #renderPrint
         #tags$p(style='font-size: 10px', '')
         validate(
-            need(length(v$clickedIdNew) > 0, 'Click on any district for more info!')
+            need(length(v$clickedIdNew) > 0, '')
         )
 
         #grab geoid of current polygon selection
@@ -469,117 +568,126 @@ shinyServer(function(input, output, session) {
         tags$div(class="header", checked=NA,
                  
                  list(
-                     #tags$hr(),
-                     tags$p(style='font-size: 10px', ''),
-                     tags$table(style = "padding: 25%; width: 100%",
-                                #1st and only row in this "table"
-                                tags$tr(style='align:center',
-                                        #column 1 (district)
-                                        tags$td(style=paste('width:65%; align:center; padding:0.2em; border:4px; border-style:solid; border-color:', strPriorityColor),
-                                                tags$strong(style='font-size: 30px; padding:0.5em', as.character(df$DISTRICT))),
-                                        #column 2 (list of priorities)
-                                        tags$td(style='width:35%;align:center',
-                                                tags$table(style='padding:5%',
-                                                           #row 1 of 4 (highest)
-                                                           tags$tr(
-                                                               tags$td(
-                                                                   style=paste('width:50%;align:center;padding:0.2em', if(strColorHighest==strPriorityColor) {strBackgroundStyle}), 
-                                                                   tags$strong(style=paste('font-size:12px;color:', if(strColorHighest==strPriorityColor)  {'white'} else {strColorHighest}), 'HIGHEST PRIORITY')
-                                                               )
-                                                           ),
-                                                           #row 2 of 4 (higher)
-                                                           tags$tr(
-                                                               tags$td(
-                                                                   style=paste('width:50%;align:center;padding:0.2em', if(strColorHigher==strPriorityColor) {strBackgroundStyle}), 
-                                                                   tags$strong(style=paste('font-size:12px;color:', if(strColorHigher==strPriorityColor)  {'white'} else {strColorHigher}), 'HIGHER PRIORITY')
-                                                               )
-                                                           ),
-                                                           #row 3 of 4 (high)
-                                                           tags$tr(
-                                                               tags$td(
-                                                                   style=paste('width:50%;align:center;padding:0.2em', if(strColorHigh==strPriorityColor) {strBackgroundStyle}), 
-                                                                   tags$strong(style=paste('font-size:12px;color:', if(strColorHigh==strPriorityColor)  {'white'} else {strColorHigh}), 'HIGH PRIORITY')
-                                                               )
-                                                           ),
-                                                           #row 4 of 4 (not prioritized)
-                                                           tags$tr(
-                                                               tags$td(
-                                                                   style=paste('width:50%;align:center;padding:0.2em', if(strColorNone==strPriorityColor) {strBackgroundStyle}), 
-                                                                   tags$strong(style=paste('font-size:12px;color:', if(strColorNone==strPriorityColor)  {'white'} else {strColorNone}), 'NOT PRIORITIZED')
-                                                               )
-                                                           )
-                                                )
-                                        )
-                                        
-                                )
-                                
-                     ),
                      tags$p(style='font-size: 10px', ''),
                      
                      #description of mission
                      tags$strong(style='font-size: 14px','MISSION'),
-                     tags$table(style = "padding: 25%; width: 100%;",
+                     tags$table(style = "padding: 25%; width: 100%; border:1px; border-style:solid; border-color:grey",
                                 #row 1 of 3 (house)
                                 tags$tr(
-                                    tags$td(style='padding-left:3%; padding-right:2%; padding-top:0.3em',tags$i(style='color:grey; font-style:italic', 'HOUSE ')),
-                                    tags$td(style='padding-left:2%; padding-right:2%; padding-top:0.3em',tags$strong(style=paste('color:', strHouseColor), df$MISSION_HOUSE))
+                                    tags$td(style='width: 30%; padding-left:3%; padding-right:2%; padding-top:0.3em; border:1px; border-style:solid; border-color:grey',tags$i(style='color:grey; font-style:italic', 'HOUSE ')),
+                                    tags$td(style='padding-left:2%; padding-right:2%; padding-top:0.3em; border:1px; border-style:solid; border-color:grey',tags$strong(style=paste('color:', strHouseColor), df$MISSION_HOUSE))
                                 ),
                                 #row 2 of 3 (senate)
                                 tags$tr(
-                                    tags$td(style='padding-left:3%; padding-right:2%; padding-top:0.3em',tags$i(style='color:grey; font-style:italic', 'SENATE ')),
-                                    tags$td(style='padding-left:2%; padding-right:2%; padding-top:0.3em', tags$strong(style=paste('color:', strSenateColor), df$MISSION_SENATE))
+                                    tags$td(style='padding-left:3%; padding-right:2%; padding-top:0.3em; border:1px; border-style:solid; border-color:grey',tags$i(style='color:grey; font-style:italic', 'SENATE ')),
+                                    tags$td(style='padding-left:2%; padding-right:2%; padding-top:0.3em; border:1px; border-style:solid; border-color:grey', tags$strong(style=paste('color:', strSenateColor), df$MISSION_SENATE))
                                 ),
                                 #row 3 of 3 (presidency)
                                 tags$tr(
-                                    tags$td(style='padding-left:3%; padding-right:2%; padding-top:0.3em',tags$i(style='color:grey; font-style:italic', 'PRESIDENT ')),
-                                    tags$td(style='padding-left:2%; padding-right:2%; padding-top:0.3em', tags$strong(style=paste('color:', strPresidencyColor), df$MISSION_PRESIDENCY))
+                                    tags$td(style='padding-left:3%; padding-right:2%; padding-top:0.3em; border:1px; border-style:solid; border-color:grey',tags$i(style='color:grey; font-style:italic', 'PRESIDENT ')),
+                                    tags$td(style='padding-left:2%; padding-right:2%; padding-top:0.3em; border:1px; border-style:solid; border-color:grey', tags$strong(style=paste('color:', strPresidencyColor), df$MISSION_PRESIDENCY))
                                 )
-                     ),
-                     
-                     #description of priority or target class
-                     if(strViewingMode == 'friendly') {
-                         tags$br() %>%
-                             #tags$strong(strPriorityDesc) 
-                             tags$strong(strFriendlyClassDesc) 
-                         
-                         
-                     } else {
-                         #DETAILED VERSION
-                         tags$hr() %>%
-                             tags$table(style = "padding: 25%; width: 100%",
-                                        #1st and only row
-                                        tags$tr(style='align:center',
-                                                #column 1 (classification)
-                                                tags$td(style='width:65%; align:center; padding:0.2em; border:2px; border-style:solid; border-color:grey',
-                                                        tags$strong(style='font-size: 13px; padding:0.5em', 'FIELD TEAM 6 RANKING')),
-                                                #column 2 (target class)
-                                                tags$td(style='width:35%;align:center',
-                                                        tags$table(style='padding:5%',
-                                                                   #row 1 of 1
-                                                                   tags$tr(
-                                                                       tags$td(style = 'width:50%;background-color:grey;padding:0.2em',
-                                                                               tags$strong(style='font-size: 12px; color:white', if(df$TARGETCLASS==99) {'NONE'} else paste('CLASS', df$TARGETCLASS))
-                                                                       )
-                                                                   )
-                                                        )
-                                                )
-                                        )    
-                             ) %>%
-                             #tags$br()  %>%
-                             tags$p(style='font-size: 10px', '')  %>%
-                             tags$p(strClassDesc)
-                     },
-                     
-                     #link to event signup
-                     tags$hr() ,
-                     tags$a(style='font-size: 17px; font-weight:bold', href=v$strEventSignupUrl, target="_blank" , "Click here to find or host an event!")
-                     
+                     )
                  ) #end of list in div tag
                  
         ) #end of sidebar html
         
     })
     
+    
+    #create info to be displayed on sidebar when user clicks on a district
+    output$clickedDistrictInfoDescription <- renderPrint({ #renderPrint
+      #tags$p(style='font-size: 10px', '')
+      validate(
+        need(length(v$clickedIdNew) > 0, '')
+      )
+      
+      #grab geoid of current polygon selection
+      geoid <- v$clickedIdNew
+      #save district info in temp dataframe based on user click
+      df <- dfDistricts[dfDistricts@data$GEOID==geoid, ]
+      
+      #set color of candidate based on party (i.e. do we want to boot or protect)
+      strHouseColor <- if(grepl('BOOT', df$MISSION_HOUSE)) { strColorRepublican } else { strColorDemocrat }
+      strSenateColor <- if(grepl('BOOT', df$MISSION_SENATE)) { strColorRepublican } else { strColorDemocrat }
+      strPresidencyColor <- strColorRepublican
+      
+      #we want the democratic candidates to win the special elections
+      strHouseColor <- if(grepl('Special Election', df$MISSION_HOUSE)) { strColorDemocrat } else { strHouseColor }
+      
+      
+      #set priority color based on priority class of district
+      strPriorityColor <- switch(as.character((df$PRIORITY)),
+                                 'HIGHEST' = strColorHighest,
+                                 'HIGHER' = strColorHigher,
+                                 'HIGH' = strColorHigh)
+      strPriorityColor <- if(df$PRIORITY=='') { strColorNone } else { strPriorityColor }
+      
+      #set priority description (text displayed under mission if friendly view)
+      #REPLACED WITH strClassDescFriendly
+      ##strPriorityDesc = if (df$PRIORITY=='') strPriorityDescriptions['NOT PRIORITIZED'] else strPriorityDescriptions[as.character(df$PRIORITY)]
+      
+      #set target class description (text displayed under mission if detailed view)
+      strClassDesc = if(df$TARGETCLASS==99) '' else paste('This class includes ', strClassDescriptions[as.numeric(df$TARGETCLASS)])
+      
+      #set target class description (text displayed under mission if detailed view)
+      strFriendlyClassDesc = strClassDescriptionsFriendly[as.numeric(df$TARGETCLASS)]
+      
+      #strBorderStyle = paste('; border:2px; border-style:solid; border-color:' , strPriorityColor, '; padding: 0.3em; background:white')
+      strBackgroundStyle = paste(';background-color:', strPriorityColor)
+      
+      #define action words based on whether 
+      tags$div(class="header", checked=NA,
+               
+               list(
+                 #link to event signup
+                 #tags$p(style='font-size: 14px', ''),
+                 tags$br(),
+                 
+                 tags$a(style='font-size: 15px; font-weight:bold', href=v$strEventSignupUrl, target="_blank" , "CLICK HERE TO FIND OR HOST AN EVENT!"),
+                 #tags$p(),
+                 #description of priority or target class
+                 if(strViewingMode == 'friendly') {
+                   tags$br() %>%
+                     #tags$strong(strPriorityDesc) 
+                     tags$strong(strFriendlyClassDesc) 
+                   
+                   
+                 } else {
+                   #DETAILED VERSION
+                   tags$hr() %>%
+                     tags$table(style = "padding: 25%; width: 100%",
+                                #1st and only row
+                                tags$tr(style='align:center',
+                                        #column 1 (classification)
+                                        tags$td(style='width:65%; align:center; padding:0.2em; border:2px; border-style:solid; border-color:grey',
+                                                tags$strong(style='font-size: 13px; padding:0.5em', 'FIELD TEAM 6 RANKING')),
+                                        #column 2 (target class)
+                                        tags$td(style='width:35%;align:center',
+                                                tags$table(style='padding:5%',
+                                                           #row 1 of 1
+                                                           tags$tr(
+                                                             tags$td(style = 'width:50%;background-color:grey;padding:0.2em',
+                                                                     tags$strong(style='font-size: 12px; color:white', if(df$TARGETCLASS==99) {'NONE'} else paste('CLASS', df$TARGETCLASS))
+                                                             )
+                                                           )
+                                                )
+                                        )
+                                )    
+                     ) %>%
+                     #tags$br()  %>%
+                     tags$p(style='font-size: 10px', '')  %>%
+                     tags$p(strClassDesc)
+                 }
+                 
+                 
+                 
+               ) #end of list in div tag
+               
+      ) #end of sidebar html
+      
+    })
     
     #---- RENDER SELECTION FUNCTIONS ----
     
