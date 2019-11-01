@@ -12,6 +12,9 @@ library(zipcode)      #zipcode to lat/long conversion
 library(DT)           #rendering datatable
 library(shinyWidgets) #for app background color
 library(dplyr)        #didn't end up using this
+library(httr)         #to interact with mobilize api
+library(rlist)        #to perform list flattening
+
 
 #access the zipcode database in the 'zipcode' package
 data(zipcode)
@@ -101,6 +104,121 @@ dfDistricts$LABEL <- paste('<strong>', levels(districtsDataFrameSimple$DISTRICT)
 #create matrix with district info keyed on geoid using google drive persistent storage (USING PROXY UNTIL GOOGLE DRIVE IS SET UP )
 #districtInfo <- cbind(districtsDataFrameSimple@data['GEOID']) #, districtsDataFrameSimple@data['NAMELSAD'])
 #districtInfo[sapply(districtInfo['GEOID'], substring, 3,4)=="ZZ"]<-NA
+
+#pull in mobilize event data in a dataframe using mobilize API 
+#https://github.com/mobilizeamerica/api/blob/master/README.md
+#result <- GET("https://api.mobilize.us/v1/organizations/1255/events?zipcode=90024&max_dist=50") #pull events within zipcode & max_dist for printing ?
+
+result <- GET("https://api.mobilize.us/v1/organizations/1255/events?timeslot_start=gte_now") #pull all future events
+lsMobilizeEvents <- httr::content(result)
+
+#lsMobilizeEvents <- lapply(lsMobilizeEvents$data, function(x) { x$timeslot_count <- length(x$timeslots); return(x) })
+#lsMobilizeEvents <- lapply(lsMobilizeEvents$data, function(x) { lapply(x$timeslots, function(y) {max(y$start_date)})})
+#lsMobilizeEvents <- lapply(lsMobilizeEvents$data, function(x) { max(x$timeslots, key=lambda x: x$start_date) })
+
+intEvents = length(lsMobilizeEvents$data)
+for (i in 1:intEvents) {
+  
+  #set the total number of time slots available
+  intTimeSlots <- length(lsMobilizeEvents$data[[i]]$timeslots)
+  lsMobilizeEvents$data[[i]]$timeslot_count <- intTimeSlots
+  
+  #loop through every timeslot to find the min and max start date for that event
+  intMinStartDate = Inf
+  intMaxEndDate = 0
+  strAllDates = ''
+  if(intTimeSlots > 0) {
+    print(i)
+    for (j in 1:intTimeSlots) {
+      print( lsMobilizeEvents$data[[i]]$timeslots[[j]])
+      intStartDate <- lsMobilizeEvents$data[[i]]$timeslots[[j]]$start_date
+      intEndDate <- lsMobilizeEvents$data[[i]]$timeslots[[j]]$end_date
+      
+      if (intStartDate < intMinStartDate) {intMinStartDate = intStartDate}
+      if (intEndDate > intMaxEndDate) {intMaxEndDate = intEndDate}
+      
+      strEventTimezone <- lsMobilizeEvents$data[[i]]$timezone 
+      intStartDate <- as.character(as.Date(as.POSIXct(as.numeric(as.character(intStartDate)),origin="1970-01-01",tz=strEventTimezone)))
+      strAllDates <- paste(strAllDates, ', ', intStartDate) 
+      #TODO: left off 2019-10-30. this is probably better as a list so we can get rid of the repeats  --------------------------------------------------------------------
+      #changing this to a list of the dates that there are events.
+      #need to also have the icons highlight on the page when you click on one of them.
+    }
+    
+    #set the min start date and max end date for the event in the event's timezone
+    strEventTimezone <- lsMobilizeEvents$data[[i]]$timezone 
+    lsMobilizeEvents$data[[i]]$min_start_date <- as.character(as.Date(as.POSIXct(as.numeric(as.character(intMinStartDate)),origin="1970-01-01",tz=strEventTimezone)))
+    lsMobilizeEvents$data[[i]]$max_end_date <- as.character(as.Date(as.POSIXct(as.numeric(as.character(intMaxEndDate)),origin="1970-01-01",tz=strEventTimezone)))
+
+  }
+  
+} #end of loop through events
+
+
+#flatten all inner lists into a primary list
+lsMobilizeEventsFlat <- lapply(lsMobilizeEvents$data, rapply, f = c)
+
+#select the columns that we care about (note that timeslots ahve a variable number...)
+#TODO: figure out how to add all the timeslots without screwing it up
+lsMobilizeEventsTrim <- lapply(lsMobilizeEventsFlat, function(x) { x[c('id',
+                                                                       'title', 
+                                                                       'event_type',
+                                                                       'timeslot_count',
+                                                                       'min_start_date',
+                                                                       'max_end_date',
+                                                                       'location.location.latitude', 
+                                                                       'location.location.longitude',
+                                                                       'location.locality',
+                                                                       'location.region',
+                                                                       'browser_url')]})
+#rename columns for cleanliness
+lsMobilizeEventsTrim <- lapply(lsMobilizeEventsTrim, setNames, nm = c('ID', 'TITLE', 'EVENT_TYPE', 'TIMESLOT_COUNT', 'MIN_START_DATE', 'MAX_END_DATE', 'LATITUDE', 'LONGITUDE', 'CITY', 'STATE', 'URL'))
+
+#convert list of lists into a matrix
+matMoblizeEvents <- do.call("rbind", lsMobilizeEventsTrim)
+
+#convert matrix into a dataframe
+dfMobilizeEvents <- as.data.frame(matMoblizeEvents)
+
+#get rid of all events with no lat/longs, because we can't display them on the map
+#TODO: add lat longs from the cities
+dfMobilizeEvents <- dfMobilizeEvents[!is.na(dfMobilizeEvents$LATITUDE) & !is.na(dfMobilizeEvents$LONGITUDE), ]
+
+#make sure the coords are numeric
+dfMobilizeEvents$LONGITUDE <- as.numeric(levels(dfMobilizeEvents$LONGITUDE))[dfMobilizeEvents$LONGITUDE] #as.numeric(dfMobilizeEvents$longitude)
+dfMobilizeEvents$LATITUDE <- as.numeric(levels(dfMobilizeEvents$LATITUDE))[dfMobilizeEvents$LATITUDE]
+
+dfMobilizeEvents$EVENT_TYPE <- str_replace(dfMobilizeEvents$EVENT_TYPE, '_', ' ')
+#dfMobilizeEvents$LABEL <- paste('<strong>', levels(dfMobilizeEvents$EVENT_TYPE)[dfMobilizeEvents$EVENT_TYPE], '</strong>')
+dfMobilizeEvents$LABEL <- paste('<strong>', dfMobilizeEvents$EVENT_TYPE, '</strong>')
+
+#create coordinates object
+xy <- dfMobilizeEvents[,c('LONGITUDE', 'LATITUDE')]
+
+#build SpatialPointsDataFrame, the data structure required to apply markers to the leaflet map
+dfMobilizeEvents <- SpatialPointsDataFrame(coords = xy, 
+                                             data = dfMobilizeEvents,
+                                             proj4string = CRS("+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0"))
+
+
+
+#create list of event ids (defines an event)
+lsMobilizeEventIds <- dfMobilizeEvents@data['ID']
+
+#json string will have some number of data elements, each one representing an event
+#to get all data elements: length(json$data[])
+#then you'll end up using browser_url, title, locality, region, latitude, longitude, congressional_district
+#json$data[[24]]$browser_url
+#json$data[[24]]$title
+#json$data[[24]]$location$locality
+#json$data[[24]]$location$region
+#json$data[[24]]$location$location$latitude
+#json$data[[24]]$location$location$longitude
+#json$data[[24]]$location$congressional_district
+
+
+
+
 
 
 # ---------------------------
