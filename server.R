@@ -14,7 +14,9 @@
 #v$dfDistrictsDatatableFiltered --> dfDistrictsDatatable filtered by input$miles (subset of districts)
 
 # Define server logic required to create map
-shinyServer(function(input, output, session) {
+shinyServer(
+  
+  function(input, output, session) {
     
     #---- RESPOND TO RESET BUTTON ----
     
@@ -26,6 +28,7 @@ shinyServer(function(input, output, session) {
         v$clickedIdNew <- vector()        #clear v$clickedIdNew so no new highlighting is added
         renderSelectionOnMap()            #allow function to render the new clickedIdPrev/clickedIdNew values
         v$strEventSignupUrl <- 'https://www.mobilize.us/ft6/'
+        v$eventId <- NULL
     })
 
     #---- DEFINE REACTIVE VALUES ----
@@ -33,9 +36,11 @@ shinyServer(function(input, output, session) {
     #reactive values that help with handling district selection & the datatable range
     v <- shiny::reactiveValues(clickedIdNew = vector(),  #store the geoid of the district currently selected by the user 
                                clickedIdPrev = vector(), #store the geoid of the district previously selected by the user in order to reset it to the original map formatting
-                               dfDistrictsDatatableFiltered = data.frame(), #store the datatable data as filtered by the current userMiles 
+                               dfDistrictsDatatableFiltered = data.frame(), #store the districts datatable data as filtered by the current userMiles 
+                               dfMobilizeEventsDatatableFiltered = data.frame(), #store the districts datatable data as filtered by the current userMiles 
                                userMiles = NULL, #store the current value of userMiles
                                strEventSignupUrl = 'https://www.mobilize.us/ft6/', #store the event signup url based on user zipcode
+                               eventId = NULL, #store the event id currently selected by the user 
                                validZipcode = 0 #keep track of whether the current zipcode is valid
     )
     
@@ -129,16 +134,47 @@ shinyServer(function(input, output, session) {
     #      userLatLong = cbind(as.numeric(zipcodeInfo['latitude']), as.numeric(zipcodeInfo['longitude']))
     #})
     
+    #TODO: create dfEventsUser that responses to zipcode as well, to calculate distances between user zip and event
+    #the display with then mirror the datatable, in that it will be filtered based on max distance
+  
+    #calculate distance between user's zipcode and each event
+    dfMobilizeEventsUser <- reactive({
+      
+      shiny::validate(
+        need(v$validZipcode == 1, "")
+      )
+      
+      zipcodeInfo <- subset(zipcode,zip==input$zipcode) #get info from database
+      shiny::validate(
+        need(nrow(zipcodeInfo) != 0,'')
+        
+      ) 
+      userLatLong <- cbind(as.numeric(zipcodeInfo['latitude']), as.numeric(zipcodeInfo['longitude']))
+      
+      #print(dfMobilizeEvents@data[,c('LATITUDE','LONGITUDE')])
+      
+      #use nearest neighbor search to find distance between lat/long of user and lat/long of each district centroid
+      nearest <- RANN::nn2(dfMobilizeEvents@data[,c('LATITUDE','LONGITUDE')], userLatLong, k=nrow(dfMobilizeEvents@data)) 
+      
+      #create dataframe of districtDistances which will eventually be merged with the districts dataframe
+      distances = round(nearest$nn.dists[1,] * milesPerDegree, 0) #convert from degrees to miles
+      eventIds = list(as.character(lsMobilizeEventIds[nearest$nn.idx,]))[[1]]
+      eventDistances <- data.frame(ID=eventIds, USERDIST=as.numeric(distances))
+
+      #create return matrix of districts ordered by proximity, store distance from user in miles
+      dfMobilizeEventsUser <- merge(dfMobilizeEvents, eventDistances, by='ID')
+    })
+    
     #calculate distance between user's zipcode and each district
     dfDistrictsUser <- reactive({
-      
-        validate(
+        
+        shiny::validate(
           need(v$validZipcode == 1, "")
         )
       
         zipcodeInfo <- subset(zipcode,zip==input$zipcode) #get info from database
         
-        validate(
+        shiny::validate(
           need(nrow(zipcodeInfo) != 0,'')
             
         )
@@ -147,7 +183,7 @@ shinyServer(function(input, output, session) {
         #use nearest neighbor search to find distance between lat/long of user and lat/long of each district centroid
         nearest <- RANN::nn2(dfDistrictCentroids[,c('INTPTLAT','INTPTLON')], userLatLong, k=nrow(dfDistrictCentroids)) 
         
-        #create dataframe of districtDistrances which will eventually be merged with the districts dataframe
+        #create dataframe of districtDistances which will eventually be merged with the districts dataframe
         distances = round(nearest$nn.dists[1,] * milesPerDegree, 0) #convert from degrees to miles
         geoids = list(as.character(lsDistrictGeoids[nearest$nn.idx,]))[[1]]
         districtDistances <- data.frame(GEOID=geoids, USERDIST=as.numeric(distances))
@@ -180,7 +216,7 @@ shinyServer(function(input, output, session) {
     #select subset of columns to be shown in datatable, rename some for readability
     #NOTE: restriction based on user's mile range happens in an observeEvent and is saves in a reactive value
     dfDistrictsDatatable <- reactive( {
-        validate(
+        shiny::validate(
             need(v$validZipcode == 1, "")
         )
         dfDistrictsDatatable <- data.frame(District=dfDistrictsUser()$DISTRICT,
@@ -201,6 +237,24 @@ shinyServer(function(input, output, session) {
         dfDistrictsDatatable <- subset(dfDistrictsDatatable, Class < 13)
         
     })
+    
+    #select subset of columns to be shown in datatable, rename some for readability
+    #NOTE: restriction based on user's mile range happens in an observeEvent and is saves in a reactive value
+    dfMobilizeEventsDatatable <- reactive( {
+      shiny::validate(
+        need(v$validZipcode == 1, "")
+      )
+      dfMobilizeEventsDatatable <- data.frame(Type=dfMobilizeEventsUser()$EVENT_TYPE,
+                                              Event=dfMobilizeEventsUser()$TITLE,
+                                              Times=paste(dfMobilizeEventsUser()$TIMESLOT_COUNT, ' timeslots between ', dfMobilizeEventsUser()$MIN_START_DATE, ' and ', dfMobilizeEventsUser()$MAX_END_DATE, sep='' ),
+                                              Location=paste(dfMobilizeEventsUser()$CITY, ', ', dfMobilizeEventsUser()$STATE, sep=''),
+                                              #City=dfMobilizeEventsUser()$CITY,
+                                              #State=dfMobilizeEventsUser()$STATE,
+                                              MilesFromZip=dfMobilizeEventsUser()$USERDIST,
+                                              SignupLink=paste('<a href=\"',dfMobilizeEventsUser()$URL, '\">SAVE THE WORLD!</a>')
+                                              ) #needed to allow user to click table row to select district
+      
+    })
 
     #restrict datatable based on the user's selected mile range whenever new user inputs are set
     observeEvent({input$zipcode
@@ -211,16 +265,70 @@ shinyServer(function(input, output, session) {
               renderSelectionInTable() 
               #if the user adjusts the mileage range, the table will redraw itself to display the correct entries
               #so we need to select the district in the table
+              
+              #TODO add userMiles adjustment for dfMobilizeEventsDatatable() here too, should be able to serve double duty
+              v$dfMobilizeEventsDatatableFiltered <- subset(dfMobilizeEventsDatatable(), as.numeric(MilesFromZip) <= v$userMiles) # ADD THIS BACK
             }
               
     })
     
     #---- BUILD DATATABLE OUTPUT ----
     
+    #2019-10-29 LEFT OFF HERE you just got the datatable to show up, haven't really formatted it at all yet. you need to do testing on when you change zip and stuff
+    #haven't incorporated any of the v$dfMobilizeEventsDatatableFiltered stuff yet
+    #fucky datatable click going in a loop, can't find a permanent state. make sure to check that. probably has to do with the events datatable fucking
+    #with reactivity.
+     
+    output$events_datatable <- DT::renderDataTable({
+      shiny::validate(
+        need(length(v$dfMobilizeEventsDatatableFiltered) != 0, ""),
+        need(v$validZipcode == 1, "")
+      )
+      df <- v$dfMobilizeEventsDatatableFiltered 
+      d <- DT::datatable(df,   
+                         selection = 'single', #only allow one row selection at a time
+                         options = list( #lengthMenu = c(10,25,50,100,500),
+                           dom = 't', #show: table (t); exclude: page length control (l) , search box/filter (f), info summary (i), page control (p), processing display (r))
+                           pageLength = 500, 
+                           order = list(list(4, 'asc')) , #3 = MilesFromZip
+                           #columnDefs = list(list(targets = c(1,2,3,4,5), visible = FALSE)), #turn off visibility for subset of columns
+                           highlightOptions(fillColor = 'blue', opacity=1, bringToFront = TRUE)
+                         ),
+                         rownames = FALSE,
+                         colnames = c("<span style='color:#67DFFF'>Event Type</span>" = 1,
+                                      "<span style='color:#67DFFF'>Event Name</span>" = 2,
+                                      "<span style='color:#67DFFF'>Timeslots</span>" = 3,
+                                      "<span style='color:#67DFFF'>Location</span>" = 4,
+                                      "<span style='color:#67DFFF'>Miles From Zip</span>" = 5,
+                                      "<span style='color:#67DFFF'>Signup Link</span>" = 6), #color the column title text & add spaces
+                         escape = FALSE,
+                         caption = tags$caption(tags$h4(style = paste('color:',strColorSalmon), paste('Field Team 6 events within ', as.character(v$userMiles), ' miles of you:')))
+      ) %>% 
+        formatStyle(
+          "<span style='color:#67DFFF'>Event Type</span>", fontWeight = 'bold', width = '12%'
+        ) %>%
+        formatStyle(
+          "<span style='color:#67DFFF'>Event Name</span>", fontSize = '80%', width = '30%'
+        ) %>%
+        formatStyle(
+          "<span style='color:#67DFFF'>Timeslots</span>", fontSize = '80%', width = '20%'
+        ) %>%
+        formatStyle(
+          "<span style='color:#67DFFF'>Location</span>", fontSize = '90%', fontWeight = 'bold', width = '15%'
+        )  %>%
+        formatStyle(
+          "<span style='color:#67DFFF'>Miles From Zip</span>", fontWeight = 'bold', width = '10%',
+          backgroundColor = 'lightgrey'
+        )  %>%
+        formatStyle(
+          "<span style='color:#67DFFF'>Signup Link</span>", fontSize = '90%', width = '12%'
+        )  
+    })
+    
     #use datatable dataframe to build the datatable output 
     #NOTE: friendly/detailed views originate from the same data, only difference in rendering is the number of columns displayed
     output$datatable <- DT::renderDataTable({
-        validate(
+        shiny::validate(
             need(length(v$dfDistrictsDatatableFiltered) != 0, ""),
             need(v$validZipcode == 1, "")
         )
@@ -365,17 +473,51 @@ shinyServer(function(input, output, session) {
                                         textsize = "15px",
                                         direction = "auto")
                                     ) %>%
+          
+                        #GENERIC MARKERS
+                        #addCircleMarkers(lng = -130.7972, lat = 35.44097, 
+                        #           group='events', 
+                        #           color='green',
+                        #           fillOpacity = 1
+                        #           ) %>%
+          
+                        #add event markers (load all of them at once)
+                        addMarkers(layerId = dfMobilizeEvents$ID, #layerId is returned during a click event
+                                   lng = dfMobilizeEvents$LONGITUDE, 
+                                   lat = dfMobilizeEvents$LATITUDE, #lng = -122.7972, lat = 38.44097, 
+                                   group='event', 
+                                   icon=fieldTeam6Icon,
+                                   #color='green',
+                                   #fillOpacity = 1,
+                                   #add HTML formatted label info upon mouseover
+                                   label = lapply(dfMobilizeEvents$LABEL, HTML)
+                                   #label = dfMobilizeEvents$event_type
+                                   #labelOptions = labelOptions(
+                                   #   style = list("font-weight" = "normal", padding = "3px 8px"),
+                                   #   textsize = "15px",
+                                   #   direction = "auto")
+                                   ) %>% 
                         #addLegend("bottomright", pal = pal, values = c(1,2,3,4,5,6,7,8,9,10,11,12), title = "Target Class", opacity = 0.3)   
                         addLegend("bottomright", pal = pal, values = c('HIGHEST','HIGHER','HIGH' ), title = "PRIORITY", opacity = 0.3)
                         
                         
     })
-
+    
+    #TEST OF GREEN LEAF ICON
+    fieldTeam6Icon <- makeIcon(
+      'fieldteam6_icon.png',
+      iconWidth = 30, iconHeight = 30
+      #iconAnchorX = 22, iconAnchorY = 94,
+      #shadowUrl = "http://leafletjs.com/examples/custom-icons/leaf-shadow.png",
+      #shadowWidth = 50, shadowHeight = 64,
+      #shadowAnchorX = 4, shadowAnchorY = 62
+    )
     
     #add a marker to represent the user's location when they specify a zipcode
     observeEvent({input$zipcode}, {
         leafletProxy("usmap") %>%
-            clearMarkers()
+            #clearMarkers()
+            clearGroup(group='zipcode')
         
         if (v$validZipcode == 1) {
             zipcodeInfo <- subset(zipcode,zip==input$zipcode) #get info from database
@@ -383,6 +525,7 @@ shinyServer(function(input, output, session) {
             leafletProxy("usmap") %>% 
                 addMarkers(lng = userLatLong[2], lat = userLatLong[1], 
                            label = paste('zipcode ',input$zipcode),
+                           group = 'zipcode',
                            labelOptions = labelOptions(
                                style = list("font-weight" = "bold", padding = "3px 8px", color = strColorDemocrat),
                                textsize = "13px",
@@ -392,7 +535,6 @@ shinyServer(function(input, output, session) {
     })
     
     
-
     #change map zoom based on zipcode and miles specified without reloading the whole map
     observeEvent({input$miles
                   input$zipcode}, {
@@ -417,6 +559,17 @@ shinyServer(function(input, output, session) {
     
     #---- BUILD SIDEBAR DISTRICT INFO ----
     
+    #TESTING print the event when clicked
+    observeEvent(input$usmap_marker_click, { 
+      p <- input$usmap_marker_click 
+      
+      if(p$group == 'event') {
+        print(p)
+        v$eventId <- p$id
+      }
+      
+    })
+    
     #adjust the event url based on zipcode, if available, otherwise maintain general link
     observeEvent({input$usmap_shape_click
                   input$zipcode}, {
@@ -427,10 +580,10 @@ shinyServer(function(input, output, session) {
     })
     
     #create info to be displayed on sidebar when user clicks on a district
-    output$clickedDistrictInfoHeader <- renderPrint({ #renderPrint
+    output$clickedDistrictInfoHeader <- renderPrint({  #renderPrint
       #tags$p(style='font-size: 10px', '')
-      validate(
-        need(length(v$clickedIdNew) > 0, 'Click on any district for more info!')
+      shiny::validate(
+        need(length(v$clickedIdNew) > 0, '')#Click on any district for more info about the candidates.')
       )
       
       #grab geoid of current polygon selection
@@ -526,7 +679,7 @@ shinyServer(function(input, output, session) {
     #create info to be displayed on sidebar when user clicks on a district
     output$clickedDistrictInfoMission <- renderPrint({ #renderPrint
         #tags$p(style='font-size: 10px', '')
-        validate(
+        shiny::validate(
             need(length(v$clickedIdNew) > 0, '')
         )
 
@@ -599,7 +752,7 @@ shinyServer(function(input, output, session) {
     #create info to be displayed on sidebar when user clicks on a district
     output$clickedDistrictInfoDescription <- renderPrint({ #renderPrint
       #tags$p(style='font-size: 10px', '')
-      validate(
+      shiny::validate(
         need(length(v$clickedIdNew) > 0, '')
       )
       
@@ -637,6 +790,8 @@ shinyServer(function(input, output, session) {
       #strBorderStyle = paste('; border:2px; border-style:solid; border-color:' , strPriorityColor, '; padding: 0.3em; background:white')
       strBackgroundStyle = paste(';background-color:', strPriorityColor)
       
+      strEventTitle = dfMobilizeEvents[dfMobilizeEvents$ID==v$eventId,]$TITLE
+      
       #define action words based on whether 
       tags$div(class="header", checked=NA,
                
@@ -645,7 +800,13 @@ shinyServer(function(input, output, session) {
                  #tags$p(style='font-size: 14px', ''),
                  tags$br(),
                  
-                 tags$a(style='font-size: 15px; font-weight:bold', href=v$strEventSignupUrl, target="_blank" , "CLICK HERE TO FIND OR HOST AN EVENT!"),
+                 
+                 #LEFT OFF HERE 2019-10-13
+                 #need to implement this the way that Jason wants with a list below the map and highlights of the icons
+                 #tags$a(style='font-size: 15px; font-weight:bold', href=v$strEventSignupUrl, target="_blank" , "CLICK HERE TO FIND OR HOST AN EVENT!"),
+                 #tags$p('or'),
+                 #tags$p(style='font-size: 15px; font-weight:bold', "CLICK ON ANY FIELD TEAM 6 EVENT ICON BELOW"),
+                 #tags$p(style='font-size: 15px; font-weight:bold', paste(v$eventId, strEventTitle)),
                  #tags$p(),
                  #description of priority or target class
                  if(strViewingMode == 'friendly') {
@@ -770,7 +931,7 @@ shinyServer(function(input, output, session) {
     renderSelectionInTable <- function(){
         
         #table will only be displayed if user has entered a zipcode
-        validate(
+        shiny::validate(
             need(v$validZipcode == 1, "")
         )
         

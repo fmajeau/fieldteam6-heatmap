@@ -34,19 +34,23 @@ shinyUI(
                      fluidRow(
                          column(3,
                                 textInput("zipcode",
-                                   "Enter your zipcode:"
+                                   "1. Enter your zipcode:"
                                    )
                                 
                                 ),
-                         column(6,
+                         column(4,
                                 sliderInput("miles",
-                                     "Choose your travel range (miles):",
+                                     "2. Choose your travel range (miles):",
                                      min = mileSliderMin,
                                      max = mileSliderMax,
-                                     value = mileSliderMin
+                                     value = mileSliderMin,
+                                     ticks = FALSE
                                      )
                                 ),
                          column(3,
+                                tags$b('3. Scroll down to find a list of nearby events, or click on any district to learn more about the elections Field Team 6 is targeting.')
+                         ),
+                         column(2,
                                 tags$br(),
                                 actionButton("reset", tags$strong(style='color:silver',"Reset"), style='width:100%')
                                 )
@@ -69,15 +73,27 @@ shinyUI(
             #        )
             #),
             #tags$p(""),
-            htmlOutput('clickedDistrictInfoHeader'),
+            
+            #USED TO BE THIS, vertical alignment
+            #htmlOutput('clickedDistrictInfoHeader'),
+            #fluidRow(
+            #    column(6, 
+            #           htmlOutput('clickedDistrictInfoMission')
+            #    ),
+            #    column(6,
+            #           htmlOutput('clickedDistrictInfoDescription')
+            #    )
+            #),
+            
             fluidRow(
                 column(6, 
-                       htmlOutput('clickedDistrictInfoMission')
+                       htmlOutput('clickedDistrictInfoHeader')
                 ),
                 column(6,
-                       htmlOutput('clickedDistrictInfoDescription')
+                       htmlOutput('clickedDistrictInfoMission')
                 )
-            )
+            ),
+            htmlOutput('clickedDistrictInfoDescription')
         ),
     
         #plot map and friendly/detailed view toggle
@@ -105,7 +121,14 @@ shinyUI(
             # )
         ),
         
-        #plot data table
+        #plot events table
+        fluidRow(
+            column(12, #table width (full width = 12)
+                   dataTableOutput('events_datatable')
+            )
+        ),
+        
+        #plot districts data table
         fluidRow(
             column(12, #table width (full width = 12)
                    dataTableOutput('datatable')
