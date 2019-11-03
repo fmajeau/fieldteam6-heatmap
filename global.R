@@ -127,10 +127,11 @@ for (i in 1:intEvents) {
   intMinStartDate = Inf
   intMaxEndDate = 0
   strAllDates = ''
+  lsAllDates <- list()
   if(intTimeSlots > 0) {
-    print(i)
+    #print(i)
     for (j in 1:intTimeSlots) {
-      print( lsMobilizeEvents$data[[i]]$timeslots[[j]])
+      #print( lsMobilizeEvents$data[[i]]$timeslots[[j]])
       intStartDate <- lsMobilizeEvents$data[[i]]$timeslots[[j]]$start_date
       intEndDate <- lsMobilizeEvents$data[[i]]$timeslots[[j]]$end_date
       
@@ -138,18 +139,29 @@ for (i in 1:intEvents) {
       if (intEndDate > intMaxEndDate) {intMaxEndDate = intEndDate}
       
       strEventTimezone <- lsMobilizeEvents$data[[i]]$timezone 
-      intStartDate <- as.character(as.Date(as.POSIXct(as.numeric(as.character(intStartDate)),origin="1970-01-01",tz=strEventTimezone)))
-      strAllDates <- paste(strAllDates, ', ', intStartDate) 
-      #TODO: left off 2019-10-30. this is probably better as a list so we can get rid of the repeats  --------------------------------------------------------------------
-      #changing this to a list of the dates that there are events.
-      #need to also have the icons highlight on the page when you click on one of them.
+      dtStartDate <- as.Date(as.POSIXct(as.numeric(as.character(intStartDate)),origin="1970-01-01",tz=strEventTimezone))
+      strStartDate <- format(dtStartDate, "%b %d, %Y")
+      #add to the list of all timeslot dates 
+      lsAllDates[[j]] <- strStartDate
     }
+  
+    #only display the top 4 dates, since they are displaying vertically and it takes up too much space
+    lsAllDates = unique(lsAllDates) # there can be multiple time slots per day
+    if (length(lsAllDates) > 3) {
+      lsDisplayDates <- lsAllDates[1:3]
+      lsDisplayDates[[4]] <- '<i>(more)</i>'
+    } else {
+      lsDisplayDates <- lsAllDates
+    }
+    
+    #turn the dates into a string that will display vertically in the table cell, set as variable
+    strAllDates <- paste(lsDisplayDates, collapse = '<br>')
+    lsMobilizeEvents$data[[i]]$date_list <- strAllDates
     
     #set the min start date and max end date for the event in the event's timezone
     strEventTimezone <- lsMobilizeEvents$data[[i]]$timezone 
     lsMobilizeEvents$data[[i]]$min_start_date <- as.character(as.Date(as.POSIXct(as.numeric(as.character(intMinStartDate)),origin="1970-01-01",tz=strEventTimezone)))
     lsMobilizeEvents$data[[i]]$max_end_date <- as.character(as.Date(as.POSIXct(as.numeric(as.character(intMaxEndDate)),origin="1970-01-01",tz=strEventTimezone)))
-
   }
   
 } #end of loop through events
@@ -160,19 +172,21 @@ lsMobilizeEventsFlat <- lapply(lsMobilizeEvents$data, rapply, f = c)
 
 #select the columns that we care about (note that timeslots ahve a variable number...)
 #TODO: figure out how to add all the timeslots without screwing it up
+#ENDED UP NOT USING min_start_date and max_end_date
 lsMobilizeEventsTrim <- lapply(lsMobilizeEventsFlat, function(x) { x[c('id',
                                                                        'title', 
                                                                        'event_type',
                                                                        'timeslot_count',
                                                                        'min_start_date',
                                                                        'max_end_date',
+                                                                       'date_list',
                                                                        'location.location.latitude', 
                                                                        'location.location.longitude',
                                                                        'location.locality',
                                                                        'location.region',
                                                                        'browser_url')]})
 #rename columns for cleanliness
-lsMobilizeEventsTrim <- lapply(lsMobilizeEventsTrim, setNames, nm = c('ID', 'TITLE', 'EVENT_TYPE', 'TIMESLOT_COUNT', 'MIN_START_DATE', 'MAX_END_DATE', 'LATITUDE', 'LONGITUDE', 'CITY', 'STATE', 'URL'))
+lsMobilizeEventsTrim <- lapply(lsMobilizeEventsTrim, setNames, nm = c('ID', 'TITLE', 'EVENT_TYPE', 'TIMESLOT_COUNT', 'MIN_START_DATE', 'MAX_END_DATE', 'DATE_LIST', 'LATITUDE', 'LONGITUDE', 'CITY', 'STATE', 'URL'))
 
 #convert list of lists into a matrix
 matMoblizeEvents <- do.call("rbind", lsMobilizeEventsTrim)
