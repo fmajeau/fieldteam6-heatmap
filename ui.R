@@ -17,7 +17,8 @@ shinyUI(
             tags$div(class="p", checked=NA,
                      tags$strong(style=paste('color:',strColorAqua),"Field Team 6 "),
                      tags$strong(style=paste('color:',strColorSalmon),"HEAT MAP"),
-                     tags$br(),
+                     #tags$em(),tags$em(),tags$em(),tags$em(),
+                     tags$span(lapply('&nbsp;',HTML)),
                      tags$i(style=paste('color:','silver', ';font-size: 16px'),"Where America Needs Democrats Most")
                      
             ) ,
@@ -30,17 +31,17 @@ shinyUI(
         #plot sidebar 
         sidebarPanel(
             width = 12,
-            tags$div(style="display:inline-block; width:100%",
+            tags$div(style="display:inline-block; width:100%; color:grey",
                      fluidRow(
                          column(3,
-                                textInput("zipcode",
-                                   "1. Enter your zipcode:"
+                                textInput("zipcode", 
+                                   lapply(paste("1. Enter your <span style='color:", strFieldTeam6Webpage, ";font-weight:bold'>zipcode</span>"), HTML)
                                    )
                                 
                                 ),
                          column(4,
                                 sliderInput("miles",
-                                     "2. Choose your travel range (miles):",
+                                     lapply(paste("2. Choose your <span style='color:", strFieldTeam6Webpage, ";font-weight:bold'>travel range</span> (miles):"),HTML),
                                      min = mileSliderMin,
                                      max = mileSliderMax,
                                      value = mileSliderMin,
@@ -48,8 +49,16 @@ shinyUI(
                                      )
                                 ),
                          column(3,
-                                tags$b('3. Scroll down to find a list of nearby events, or click on any district to learn more about the elections Field Team 6 is targeting.')
-                         ),
+                                #tags$b("3. Scroll down to find a list of <span style='color:blue;font-weight:bold'>nearby events</span>, or click on any district to <span style='color:blue;font-weight:bold'>learn more about the elections</span> Field Team 6 is targeting.")
+                                lapply(paste("3. Scroll down to find a list of <span style='color:",
+                                             strFieldTeam6Webpage, 
+                                             ";font-weight:bold'>nearby events</span>, or click on any district to <span style='color:",
+                                             strFieldTeam6Webpage, 
+                                             ";font-weight:bold'>learn more about the elections</span> FT6 is targeting."
+                                             ), HTML
+                                       )
+                                
+                                ),
                          column(2,
                                 tags$br(),
                                 actionButton("reset", tags$strong(style='color:silver',"Reset"), style='width:100%')
@@ -104,7 +113,7 @@ shinyUI(
             #                   choiceValues = list( 'friendly', 'detailed'),
             #                   selected = 'friendly',
             #                   shape = 'curve'),
-            leafletOutput("usmap", height = 500) #,
+            leafletOutput("usmap", height = 450) #,
             
             # #display links to data sources below map (currently display in the map attributions instead)
             # tags$div(class="p", style='font-size:9px', checked=NA,
@@ -131,7 +140,7 @@ shinyUI(
         #plot districts data table
         fluidRow(
             column(12, #table width (full width = 12)
-                   dataTableOutput('datatable')
+                   dataTableOutput('districts_datatable')
             )
         )
         # #retain connection with websocket

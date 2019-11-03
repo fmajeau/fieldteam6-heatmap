@@ -7,6 +7,12 @@
 #    http://shiny.rstudio.com/
 #
 
+#TODO: left off 2019-11-01. got the timeslots to work nicely. 
+## need to also have the icons highlight on the page when you click on one of them. & vice versa.
+#cope of events table is changing whenever the user dist changes so that is a nice feature. 
+#dont need to add that for the markers too
+# ^^^^
+
 #SUMMARY OF DATAFRAMES
 #dfDistricts --> all non-user specific information about each polygon/distric (full set of districts) *defined in global.R*
 #dfDistrictsUser --> includes miles between user zipcode and each polygon (full set of districts)
@@ -24,23 +30,32 @@ shinyServer(
         updateTextInput(session, "zipcode", value = "")
         updateSliderInput(session, "miles", value = mileSliderMin)
         leafletProxy("usmap") %>% fitBounds(-120, 25, -75, 50) #contiguous 48
-        v$clickedIdPrev <- v$clickedIdNew #set v$clickedIdPrev so it is removed from map
-        v$clickedIdNew <- vector()        #clear v$clickedIdNew so no new highlighting is added
-        renderSelectionOnMap()            #allow function to render the new clickedIdPrev/clickedIdNew values
+        
+        v$clickedGeoIdPrev <- v$clickedGeoIdNew #set v$clickedGeoIdPrev so it is removed from map
+        v$clickedGeoIdNew <- vector()        #clear v$clickedGeoIdNew so no new highlighting is added
+        renderDistrictSelectionOnMap()            #allow function to render the new clickedGeoIdPrev/clickedGeoIdNew values
+        
+        v$clickedEventIdPrev <- v$clickedEventIdNew  #set v$clickedEventIdPrev so it is removed from map
+        v$clickedEventIdNew <- vector()         #clear v$clickedEventIdNew so no new highlighting is added
+        renderEventSelectionOnMap()            #allow function to render the new clickedGeoIdPrev/clickedGeoIdNew values
+        #resetEventsOnMap() # this is different than the district selection because 
+        
         v$strEventSignupUrl <- 'https://www.mobilize.us/ft6/'
-        v$eventId <- NULL
     })
 
     #---- DEFINE REACTIVE VALUES ----
     
     #reactive values that help with handling district selection & the datatable range
-    v <- shiny::reactiveValues(clickedIdNew = vector(),  #store the geoid of the district currently selected by the user 
-                               clickedIdPrev = vector(), #store the geoid of the district previously selected by the user in order to reset it to the original map formatting
+    v <- shiny::reactiveValues(clickedGeoIdNew = vector(),  #store the geoid of the district currently selected by the user 
+                               clickedGeoIdPrev = vector(), #store the geoid of the district previously selected by the user in order to reset it to the original map formatting
+                               clickedEventIdNew = vector(),  #store the event id of the event currently selected by the user 
+                               clickedEventIdPrev = vector(), #store the event id of the event previously selected by the user in order to reset it to the original map formatting
+                               
                                dfDistrictsDatatableFiltered = data.frame(), #store the districts datatable data as filtered by the current userMiles 
                                dfMobilizeEventsDatatableFiltered = data.frame(), #store the districts datatable data as filtered by the current userMiles 
                                userMiles = NULL, #store the current value of userMiles
                                strEventSignupUrl = 'https://www.mobilize.us/ft6/', #store the event signup url based on user zipcode
-                               eventId = NULL, #store the event id currently selected by the user 
+                               #eventId = NULL, #store the event id currently selected by the user 
                                validZipcode = 0 #keep track of whether the current zipcode is valid
     )
     
@@ -58,58 +73,122 @@ shinyServer(
     
     #assign shape_click output to variable (tells us which polygon was clicked on, used below to create clickedDistrictInfo)
     observeEvent(input$usmap_shape_click, {
-        v$clickedIdPrev <- v$clickedIdNew #save currently clicked district as the previously clicked district
+        v$clickedGeoIdPrev <- v$clickedGeoIdNew #save currently clicked district as the previously clicked district
         click <- input$usmap_shape_click  #grab new click info
         geoid <- click$id                 #grab geoid of new clicked district
-        v$clickedIdNew <- geoid           #redefine currently clicked district 
+        v$clickedGeoIdNew <- geoid           #redefine currently clicked district 
         #print('map click:')
         #print(geoid)
 
+        #TRYING OUT ONLY HAVING THE ICONS CHANGE THE ZOOM
         #if the table is being displayed, check whether we need to adjust the data bounds 
-        if(v$validZipcode == 1) {
-            g <- count(subset(v$dfDistrictsDatatableFiltered, GEOID==geoid)) #identify whether clicked geoid is in the current datatable display
-            if(g == 0) {
-                #districtDistances holds GEOID and miles from zip
-                #use that to find new miles input range so the clicked district shows up in the table
-                userMilesNew <- subset(dfDistrictsUser(),GEOID==geoid)$USERDIST
-                
-                #only rebuild the table if you're expanding the scope (if not already at max & if clicked district increases the range)
-                if(v$userMiles < mileSliderMax & userMilesNew > v$userMiles) {
-                    if(userMilesNew >= mileSliderMax) 
-                        #userMilesSlider <- mileSliderMax
-                        v$userMiles <- mileSliderMax
-                    else
-                        #userMilesSlider <- userMilesNew
-                        v$userMiles <- userMilesNew
-                    #v$userMiles <- userMilesNew
-                    updateSliderInput(session, "miles", value = v$userMiles)
-                    #update the filter of the datatable based on the expanded zoom 
-                    #-- need to do this here because the normal observeEvent will not update the datatable before we need to select the
-                    #   row using renderSelectionInTable() -- this is the reason the datatable data needs to be a reactive value
-                    v$dfDistrictsDatatableFiltered <- subset(dfDistrictsDatatable(), as.numeric(MilesFromZip) <= v$userMiles)
-                }
-                
-            }
-            
-        } #else, table should not be displaying yet
-        renderSelectionOnMap()   #since the map was clicked, update the map
-        renderSelectionInTable() #since the map was clicked, update the table
+        # if(v$validZipcode == 1) {
+        #     g <- count(subset(v$dfDistrictsDatatableFiltered, GEOID==geoid)) #identify whether clicked geoid is in the current datatable display
+        #     if(g == 0) {
+        #         #districtDistances holds GEOID and miles from zip
+        #         #use that to find new miles input range so the clicked district shows up in the table
+        #         userMilesNew <- subset(dfDistrictsUser(),GEOID==geoid)$USERDIST
+        #         
+        #         #only rebuild the table if you're expanding the scope (if not already at max & if clicked district increases the range)
+        #         if(v$userMiles < mileSliderMax & userMilesNew > v$userMiles) {
+        #             if(userMilesNew >= mileSliderMax) 
+        #                 #userMilesSlider <- mileSliderMax
+        #                 v$userMiles <- mileSliderMax
+        #             else
+        #                 #userMilesSlider <- userMilesNew
+        #                 v$userMiles <- userMilesNew
+        #             #v$userMiles <- userMilesNew
+        #             updateSliderInput(session, "miles", value = v$userMiles)
+        #             #update the filter of the datatable based on the expanded zoom 
+        #             #-- need to do this here because the normal observeEvent will not update the datatable before we need to select the
+        #             #   row using renderDistrictSelectionInTable() -- this is the reason the datatable data needs to be a reactive value
+        #             v$dfDistrictsDatatableFiltered <- subset(dfDistrictsDatatable(), as.numeric(MilesFromZip) <= v$userMiles)
+        #         }
+        #         
+        #     }
+        #     
+        # } #else, table should not be displaying yet
+        renderDistrictSelectionOnMap()   #since the map was clicked, update the map
+        renderDistrictSelectionInTable() #since the map was clicked, update the table
     })
     
     #listen to a table row click, update map to render the selected district
-    observeEvent(input$datatable_rows_selected,{
-        rowNumber <- input$datatable_rows_selected 
+    observeEvent(input$districts_datatable_rows_selected,{
+        rowNumber <- input$districts_datatable_rows_selected 
         geoid <- v$dfDistrictsDatatableFiltered[rowNumber,]$GEOID
 
         #if the new geoid originated from a table click, update the map
-        #NOTE: if map is clicked, renderSelectionInTable will be called which alters input$datatable_rows_selected, 
+        #NOTE: if map is clicked, renderDistrictSelectionInTable will be called which alters input$districts_datatable_rows_selected, 
         #      thereby triggering this function, in which case we do not want to redefine Prev/New
         if(!is.na(geoid)) {
-            v$clickedIdPrev <- v$clickedIdNew
-            v$clickedIdNew <- geoid
-            renderSelectionOnMap()
+            v$clickedGeoIdPrev <- v$clickedGeoIdNew
+            v$clickedGeoIdNew <- geoid
+            renderDistrictSelectionOnMap()
         }
-        renderSelectionInTable() #since the table was clicked, update the table
+        renderDistrictSelectionInTable() #since the table was clicked, update the table
+        
+    })
+    
+    #---- HANDLE MAP+TABLE EVENT SELECTION ----
+    
+    #assign marker_click output to variable (tells us which marker was clicked on, used below to create the event datatable)
+    #NOTE: this is almost exactly the same as the district click functions/logic
+    observeEvent(input$usmap_marker_click, { 
+      v$clickedEventIdPrev <- v$clickedEventIdNew
+      click <- input$usmap_marker_click   #grab new click info
+      eventId <- click$id                 #grab eventId of new clicked marker
+      v$clickedEventIdNew <- eventId
+      
+      #not going to change the scope of the map depending on which event you click on ...
+      #if the table is being displayed, check whether we need to adjust the data bounds 
+      if(v$validZipcode == 1) {
+          g <- count(subset(v$dfMobilizeEventsDatatableFiltered, ID==eventId)) #identify whether clicked event id is in the current datatable display
+          if(g == 0) {
+              #districtDistances holds GEOID and miles from zip
+              #use that to find new miles input range so the clicked district shows up in the table
+              userMilesNew <- subset(dfMobilizeEventsUser(),ID==eventId)$USERDIST
+              
+              #only rebuild the table if you're expanding the scope (if not already at max & if clicked district increases the range)
+              if(v$userMiles < mileSliderMax & userMilesNew > v$userMiles) {
+                  if(userMilesNew >= mileSliderMax) 
+                      #userMilesSlider <- mileSliderMax
+                      v$userMiles <- mileSliderMax
+                  else
+                      #userMilesSlider <- userMilesNew
+                      v$userMiles <- userMilesNew
+                  #v$userMiles <- userMilesNew
+                  updateSliderInput(session, "miles", value = v$userMiles)
+                  #update the filter of the datatable based on the expanded zoom 
+                  #-- need to do this here because the normal observeEvent will not update the datatable before we need to select the
+                  #   row using renderDistrictSelectionInTable() -- this is the reason the datatable data needs to be a reactive value
+                  v$dfMobilizeEventsDatatableFiltered <- subset(dfMobilizeEventsDatatable(), as.numeric(MilesFromZip) <= v$userMiles)
+              }
+              
+          }
+          
+      } #else, table should not be displaying yet
+      
+      #TODO: left off here 2019-10-31. add functions that will work for the eventIds instead
+      renderEventSelectionOnMap()   #since the map was clicked, update the map
+      renderEventSelectionInTable() #since the map was clicked, update the table
+      
+    })
+    
+    #listen to a table row click, update map to render the selected district
+    observeEvent(input$events_datatable_rows_selected,{
+        rowNumber <- input$events_datatable_rows_selected 
+        eventId <- v$dfMobilizeEventsDatatableFiltered[rowNumber,]$ID
+        print(eventId)
+        print(v$dfMobilizeEventsDatatableFiltered)
+        #if the new geoid originated from a table click, update the map
+        #NOTE: if map is clicked, renderDistrictSelectionInTable will be called which alters input$events_datatable_rows_selected, 
+        #      thereby triggering this function, in which case we do not want to redefine Prev/New
+        if(!is.na(eventId)) {
+            v$clickedEventIdPrev <- v$clickedEventIdNew
+            v$clickedEventIdNew <- eventId
+            renderEventSelectionOnMap()
+        }
+        renderEventSelectionInTable() #since the table was clicked, update the table #<----------- NOT DEFINED YET
         
     })
     
@@ -246,13 +325,14 @@ shinyServer(
       )
       dfMobilizeEventsDatatable <- data.frame(Type=dfMobilizeEventsUser()$EVENT_TYPE,
                                               Event=dfMobilizeEventsUser()$TITLE,
-                                              Times=paste(dfMobilizeEventsUser()$TIMESLOT_COUNT, ' timeslots between ', dfMobilizeEventsUser()$MIN_START_DATE, ' and ', dfMobilizeEventsUser()$MAX_END_DATE, sep='' ),
+                                              #Times=paste(dfMobilizeEventsUser()$TIMESLOT_COUNT, ' timeslots between ', dfMobilizeEventsUser()$MIN_START_DATE, ' and ', dfMobilizeEventsUser()$MAX_END_DATE, sep='' ),
+                                              Dates=dfMobilizeEventsUser()$DATE_LIST,
                                               Location=paste(dfMobilizeEventsUser()$CITY, ', ', dfMobilizeEventsUser()$STATE, sep=''),
                                               #City=dfMobilizeEventsUser()$CITY,
                                               #State=dfMobilizeEventsUser()$STATE,
                                               MilesFromZip=dfMobilizeEventsUser()$USERDIST,
-                                              SignupLink=paste('<a href=\"',dfMobilizeEventsUser()$URL, '\">SAVE THE WORLD!</a>')
-                                              ) #needed to allow user to click table row to select district
+                                              SignupLink=paste('<a href=\"',dfMobilizeEventsUser()$URL, '\">VOLUNTEER!</a>'),
+                                              ID=dfMobilizeEventsUser()$ID) #needed to allow user to click table row to select district
       
     })
 
@@ -262,12 +342,13 @@ shinyServer(
             
             if(v$validZipcode == 1) {
               v$dfDistrictsDatatableFiltered <- subset(dfDistrictsDatatable(), as.numeric(MilesFromZip) <= v$userMiles)
-              renderSelectionInTable() 
+              renderDistrictSelectionInTable() 
               #if the user adjusts the mileage range, the table will redraw itself to display the correct entries
               #so we need to select the district in the table
               
               #TODO add userMiles adjustment for dfMobilizeEventsDatatable() here too, should be able to serve double duty
               v$dfMobilizeEventsDatatableFiltered <- subset(dfMobilizeEventsDatatable(), as.numeric(MilesFromZip) <= v$userMiles) # ADD THIS BACK
+              renderEventSelectionInTable()
             }
               
     })
@@ -291,43 +372,51 @@ shinyServer(
                            dom = 't', #show: table (t); exclude: page length control (l) , search box/filter (f), info summary (i), page control (p), processing display (r))
                            pageLength = 500, 
                            order = list(list(4, 'asc')) , #3 = MilesFromZip
-                           #columnDefs = list(list(targets = c(1,2,3,4,5), visible = FALSE)), #turn off visibility for subset of columns
+                           columnDefs = list(list(targets = c(6), visible = FALSE)), #turn off visibility for subset of columns
                            highlightOptions(fillColor = 'blue', opacity=1, bringToFront = TRUE)
                          ),
                          rownames = FALSE,
                          colnames = c("<span style='color:#67DFFF'>Event Type</span>" = 1,
                                       "<span style='color:#67DFFF'>Event Name</span>" = 2,
-                                      "<span style='color:#67DFFF'>Timeslots</span>" = 3,
+                                      "<span style='color:#67DFFF'>Dates</span>" = 3,
                                       "<span style='color:#67DFFF'>Location</span>" = 4,
                                       "<span style='color:#67DFFF'>Miles From Zip</span>" = 5,
                                       "<span style='color:#67DFFF'>Signup Link</span>" = 6), #color the column title text & add spaces
                          escape = FALSE,
-                         caption = tags$caption(tags$h4(style = paste('color:',strColorSalmon), paste('Field Team 6 events within ', as.character(v$userMiles), ' miles of you:')))
+                         caption = tags$caption(
+                            #tags$span(style = paste('color:',strColorNone, ';font-size:16px'), "Field Team 6"),
+                            tags$span(style = paste('color:',strColorSalmon, ';font-size:18px; font-weight:bold'), "Volunteer events "),
+                            tags$span(style = paste('color:',strColorNone, ';font-size:16px'), " within "),
+                            tags$span(style = paste('color:',strColorSalmon, ';font-size:18px; font-weight:bold'), as.character(v$userMiles)),
+                            tags$span(style = paste('color:',strColorNone, ';font-size:16px'), "miles of you: ")
+                            ),
+                            
+                         #lapply(paste("1. Enter your <span style='color:", strFieldTeam6Webpage, ";font-weight:bold'>Field Team 6</span> events within"), HTML)
       ) %>% 
         formatStyle(
           "<span style='color:#67DFFF'>Event Type</span>", fontWeight = 'bold', width = '12%'
         ) %>%
         formatStyle(
-          "<span style='color:#67DFFF'>Event Name</span>", fontSize = '80%', width = '30%'
+          "<span style='color:#67DFFF'>Event Name</span>", fontSize = '80%', width = '39%'
         ) %>%
         formatStyle(
-          "<span style='color:#67DFFF'>Timeslots</span>", fontSize = '80%', width = '20%'
+          "<span style='color:#67DFFF'>Dates</span>", fontSize = '80%', width = '10%', textAlign = 'center'
         ) %>%
         formatStyle(
-          "<span style='color:#67DFFF'>Location</span>", fontSize = '90%', fontWeight = 'bold', width = '15%'
+          "<span style='color:#67DFFF'>Location</span>", fontSize = '90%', fontWeight = 'bold', width = '18%'
         )  %>%
         formatStyle(
-          "<span style='color:#67DFFF'>Miles From Zip</span>", fontWeight = 'bold', width = '10%',
+          "<span style='color:#67DFFF'>Miles From Zip</span>", fontWeight = 'bold', width = '9%',
           backgroundColor = 'lightgrey'
         )  %>%
         formatStyle(
-          "<span style='color:#67DFFF'>Signup Link</span>", fontSize = '90%', width = '12%'
+          "<span style='color:#67DFFF'>Signup Link</span>", fontSize = '90%', width = '11%', textAlign = 'center'
         )  
     })
     
     #use datatable dataframe to build the datatable output 
     #NOTE: friendly/detailed views originate from the same data, only difference in rendering is the number of columns displayed
-    output$datatable <- DT::renderDataTable({
+    output$districts_datatable <- DT::renderDataTable({
         shiny::validate(
             need(length(v$dfDistrictsDatatableFiltered) != 0, ""),
             need(v$validZipcode == 1, "")
@@ -349,7 +438,14 @@ shinyServer(
                                             "<span style='color:#67DFFF'>Priority</span>" = 2,
                                             "<span style='color:#67DFFF'>Miles From Zip</span>" = 8), #color the column title text & add spaces
                                escape = FALSE,
-                               caption = tags$caption(tags$h4(style = paste('color:',strColorSalmon), paste('Priority districts within ', as.character(v$userMiles), ' miles of you:')))
+                               caption = tags$caption(
+                                 #tags$h4(style = paste('color:',strColorSalmon), paste('Priority districts within ', as.character(v$userMiles), ' miles of you:'))
+                                 #tags$span(style = paste('color:',strColorNone, ';font-size:16px'), "Field Team 6"),
+                                 tags$span(style = paste('color:',strColorSalmon, ';font-size:18px; font-weight:bold'), " Priority districts "),
+                                 tags$span(style = paste('color:',strColorNone, ';font-size:16px'), " within "),
+                                 tags$span(style = paste('color:',strColorSalmon, ';font-size:18px; font-weight:bold'), as.character(v$userMiles)),
+                                 tags$span(style = paste('color:',strColorNone, ';font-size:16px'), "miles of you: ")
+                                 )
             ) %>% 
                 formatStyle(
                     "<span style='color:#67DFFF'>District</span>", fontWeight = 'bold', width = '10%'
@@ -503,9 +599,19 @@ shinyServer(
                         
     })
     
-    #TEST OF GREEN LEAF ICON
+    #normal field team 6 icon
     fieldTeam6Icon <- makeIcon(
       'fieldteam6_icon.png',
+      iconWidth = 30, iconHeight = 30
+      #iconAnchorX = 22, iconAnchorY = 94,
+      #shadowUrl = "http://leafletjs.com/examples/custom-icons/leaf-shadow.png",
+      #shadowWidth = 50, shadowHeight = 64,
+      #shadowAnchorX = 4, shadowAnchorY = 62
+    )
+    
+    #normal field team 6 icon
+    fieldTeam6IconBright <- makeIcon(
+      'fieldteam6_icon_bright.png',
       iconWidth = 30, iconHeight = 30
       #iconAnchorX = 22, iconAnchorY = 94,
       #shadowUrl = "http://leafletjs.com/examples/custom-icons/leaf-shadow.png",
@@ -559,17 +665,6 @@ shinyServer(
     
     #---- BUILD SIDEBAR DISTRICT INFO ----
     
-    #TESTING print the event when clicked
-    observeEvent(input$usmap_marker_click, { 
-      p <- input$usmap_marker_click 
-      
-      if(p$group == 'event') {
-        print(p)
-        v$eventId <- p$id
-      }
-      
-    })
-    
     #adjust the event url based on zipcode, if available, otherwise maintain general link
     observeEvent({input$usmap_shape_click
                   input$zipcode}, {
@@ -583,11 +678,11 @@ shinyServer(
     output$clickedDistrictInfoHeader <- renderPrint({  #renderPrint
       #tags$p(style='font-size: 10px', '')
       shiny::validate(
-        need(length(v$clickedIdNew) > 0, '')#Click on any district for more info about the candidates.')
+        need(length(v$clickedGeoIdNew) > 0, '')#Click on any district for more info about the candidates.')
       )
       
       #grab geoid of current polygon selection
-      geoid <- v$clickedIdNew
+      geoid <- v$clickedGeoIdNew
       #save district info in temp dataframe based on user click
       df <- dfDistricts[dfDistricts@data$GEOID==geoid, ]
       
@@ -680,11 +775,11 @@ shinyServer(
     output$clickedDistrictInfoMission <- renderPrint({ #renderPrint
         #tags$p(style='font-size: 10px', '')
         shiny::validate(
-            need(length(v$clickedIdNew) > 0, '')
+            need(length(v$clickedGeoIdNew) > 0, '')
         )
 
         #grab geoid of current polygon selection
-        geoid <- v$clickedIdNew
+        geoid <- v$clickedGeoIdNew
         #save district info in temp dataframe based on user click
         df <- dfDistricts[dfDistricts@data$GEOID==geoid, ]
         
@@ -753,11 +848,11 @@ shinyServer(
     output$clickedDistrictInfoDescription <- renderPrint({ #renderPrint
       #tags$p(style='font-size: 10px', '')
       shiny::validate(
-        need(length(v$clickedIdNew) > 0, '')
+        need(length(v$clickedGeoIdNew) > 0, '')
       )
       
       #grab geoid of current polygon selection
-      geoid <- v$clickedIdNew
+      geoid <- v$clickedGeoIdNew
       #save district info in temp dataframe based on user click
       df <- dfDistricts[dfDistricts@data$GEOID==geoid, ]
       
@@ -790,7 +885,7 @@ shinyServer(
       #strBorderStyle = paste('; border:2px; border-style:solid; border-color:' , strPriorityColor, '; padding: 0.3em; background:white')
       strBackgroundStyle = paste(';background-color:', strPriorityColor)
       
-      strEventTitle = dfMobilizeEvents[dfMobilizeEvents$ID==v$eventId,]$TITLE
+      #strEventTitle = dfMobilizeEvents[dfMobilizeEvents$ID==v$eventId,]$TITLE
       
       #define action words based on whether 
       tags$div(class="header", checked=NA,
@@ -798,7 +893,7 @@ shinyServer(
                list(
                  #link to event signup
                  #tags$p(style='font-size: 14px', ''),
-                 tags$br(),
+                 #tags$br(),
                  
                  
                  #LEFT OFF HERE 2019-10-13
@@ -850,14 +945,14 @@ shinyServer(
       
     })
     
-    #---- RENDER SELECTION FUNCTIONS ----
+    #---- RENDER DISTRICT SELECTION FUNCTIONS ----
     
     #highlight selected district on map (when clicking a district for the first time, switching districts, or reseting the map)
-    renderSelectionOnMap <- function(){
+    renderDistrictSelectionOnMap <- function(){
 
         #if a polygon had already been selected, reset it to the normal state
-        if(length(v$clickedIdPrev)>0) {
-            removeGeoid <- v$clickedIdPrev #previously selected geoid
+        if(length(v$clickedGeoIdPrev)>0) {
+            removeGeoid <- v$clickedGeoIdPrev #previously selected geoid
             df <- dfDistricts[dfDistricts@data$GEOID==removeGeoid, ] #dataframe for the previously selected geoid
             
             #reset polygon to have same formatting as the rest of the map
@@ -890,10 +985,10 @@ shinyServer(
                             )
         }
         #highlight the newly selected polygon
-        if( is.null( v$clickedIdNew ) ){ 
-            req( v$clickedIdNew )
+        if( is.null( v$clickedGeoIdNew ) ){ 
+            req( v$clickedGeoIdNew )
         } else {
-            addGeoid <- v$clickedIdNew
+            addGeoid <- v$clickedGeoIdNew
             df <- dfDistricts[dfDistricts@data$GEOID==addGeoid, ] #clicked district
 
             #draw the polygon with a thicker black border
@@ -922,13 +1017,13 @@ shinyServer(
                 )
               
         }
-    } #end of renderSelectionOnMap
+    } #end of renderDistrictSelectionOnMap
     
     #create proxy datatable so we can update without reloading the datatable
-    tableProxy <- DT::dataTableProxy('datatable')
+    districtTableProxy <- DT::dataTableProxy('districts_datatable')
 
     #highlight selected district, if possible, in table
-    renderSelectionInTable <- function(){
+    renderDistrictSelectionInTable <- function(){
         
         #table will only be displayed if user has entered a zipcode
         shiny::validate(
@@ -936,9 +1031,9 @@ shinyServer(
         )
         
         #if a new geoid has been selected on the map, check if it is in the current display of table rows
-        if(length(v$clickedIdNew)>0) {
+        if(length(v$clickedGeoIdNew)>0) {
             #get geoid that is being displayed on the map
-            geoid <- v$clickedIdNew
+            geoid <- v$clickedGeoIdNew
             
             #in order to select a row in the datatable display, you need the row number specific to the displayed data
             #indexing into the dataframe to return the matching row will redefine the row number, thus discarding the value required for selection
@@ -950,11 +1045,112 @@ shinyServer(
 
             if (length(rowNumber) == 0) print('That district is not within the range you specified ')
 
-            tableProxy %>% DT::selectRows(as.numeric(rowNumber)) #%>%
+            districtTableProxy %>% DT::selectRows(as.numeric(rowNumber)) #%>%
             
             }
         
-    } #end of renderSelectionInTable
+    } #end of renderDistrictSelectionInTable
+    
+    #---- RENDER EVENT SELECTION FUNCTIONS ----
+    
+    #highlight selected district on map (when clicking a event for the first time, switching events, or reseting the map)
+    renderEventSelectionOnMap <- function(){
+
+        #if a polygon had already been selected, reset it to the normal state
+        if(length(v$clickedEventIdPrev)>0) {
+            removeEventId <- v$clickedEventIdPrev #previously selected event id
+            df <- dfMobilizeEvents[dfMobilizeEvents@data$ID==removeEventId, ] #dataframe for the previously selected event id
+            
+            #reset polygon to have same formatting as the rest of the map
+            #NOTE: there can only ever be one polygon for a given layerId, so this technically redraws/overwrites the polygon 
+            leafletProxy( mapId = "usmap" ) %>%
+                
+                addMarkers(data = df,
+                           layerId = removeEventId, #layerId is returned during a click event
+                           lng = df$LONGITUDE, 
+                           lat = df$LATITUDE, #lng = -122.7972, lat = 38.44097, 
+                           group='event', 
+                           icon=fieldTeam6Icon,
+                           #color='green',
+                           #fillOpacity = 1,
+                           #add HTML formatted label info upon mouseover
+                           label = lapply(df$LABEL, HTML)
+                           #label = dfMobilizeEvents$event_type
+                           #labelOptions = labelOptions(
+                           #   style = list("font-weight" = "normal", padding = "3px 8px"),
+                           #   textsize = "15px",
+                           #   direction = "auto")
+                           #let it use the default style just like original map
+                           ) 
+        }
+        #highlight the newly selected polygon
+        if( is.null( v$clickedEventIdNew ) || length(v$clickedEventIdNew) == 0 ){ 
+            req( v$clickedEventIdNew )
+            print('fiona line 1059')
+        } else {
+            addEventId <- v$clickedEventIdNew
+            df <- dfMobilizeEvents[dfMobilizeEvents@data$ID==addEventId, ] #clicked district
+
+            #add a bright highlight around the icon
+            #NOTE: there can only ever be one polygon for a given layerId, so this technically redraws/overwrites the entire polygon 
+            leafletProxy( mapId = "usmap" ) %>%
+              addMarkers(data = df,
+                           layerId = addEventId, #layerId is returned during a click event
+                           lng = df$LONGITUDE, 
+                           lat = df$LATITUDE, #lng = -122.7972, lat = 38.44097, 
+                           group='event', 
+                           icon=fieldTeam6IconBright,
+                           #color='green',
+                           #fillOpacity = 1,
+                           #add HTML formatted label info upon mouseover
+                           label = lapply(df$LABEL, HTML)
+                           #label = dfMobilizeEvents$event_type
+                           #labelOptions = labelOptions(
+                           #   style = list("font-weight" = "normal", padding = "3px 8px"),
+                           #   textsize = "15px",
+                           #   direction = "auto")
+                           #let it use the default style just like original map
+                           )   
+              
+              
+        }
+    } #end of renderEventSelectionOnMap
+    
+    #create proxy datatable so we can update without reloading the datatable
+    eventTableProxy <- DT::dataTableProxy('events_datatable')
+
+    #highlight selected district, if possible, in table
+    renderEventSelectionInTable <- function(){
+        
+        #table will only be displayed if user has entered a zipcode
+        shiny::validate(
+            need(v$validZipcode == 1, "")
+        )
+        
+        #if a new geoid has been selected on the map, check if it is in the current display of table rows
+        if(length(v$clickedEventIdNew)>0) {
+            #get eventid that is being displayed on the map
+            eventId <- v$clickedEventIdNew
+            
+            #in order to select a row in the datatable display, you need the row number specific to the displayed data
+            #indexing into the dataframe to return the matching row will redefine the row number, thus discarding the value required for selection
+            #to get around this, make a copy of the dataframe, save the row number as a new column, then index
+            labeledTableInfo <- v$dfMobilizeEventsDatatableFiltered
+            labeledTableInfo$ROWNUMBER <- row(v$dfMobilizeEventsDatatableFiltered)[,1]
+            
+            clickedRow <- labeledTableInfo[labeledTableInfo$ID==eventId, ]
+            rowNumber <- clickedRow$ROWNUMBER
+            print(clickedRow)
+            print(rowNumber)
+
+            if (length(rowNumber) == 0) print('That district is not within the range you specified ')
+
+            eventTableProxy %>% DT::selectRows(as.numeric(rowNumber)) #%>%
+            
+            }
+        
+    } #end of renderEventSelectionInTable
+
 
 
 })
