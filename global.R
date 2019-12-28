@@ -4,20 +4,33 @@
 
 
 library(shiny)
-library(leaflet)      #builds map and layers on polygons
-library(rgdal)        #read geojson file
-library(rgeos)        #simplify polygons so map loads faster
-library(RANN)         #nearest neighbor search for lat/longs
-library(zipcode)      #zipcode to lat/long conversion
-library(DT)           #rendering datatable
-library(shinyWidgets) #for app background color
-library(dplyr)        #didn't end up using this
-library(httr)         #to interact with mobilize api
-library(rlist)        #to perform list flattening
-
+library(leaflet)        #builds map and layers on polygons
+library(rgdal)          #to read geojson file
+library(rgeos)          #to simplify polygons so map loads faster
+library(RANN)           #for nearest neighbor search for lat/longs
+library(zipcode)        #for zipcode to lat/long conversion
+library(DT)             #for rendering datatable
+library(shinyWidgets)   #for app background color
+library(dplyr)          #didn't end up using this
+library(httr)           #to interact with mobilize api
+library(rlist)          #to perform list flattening
+library(stringr)        #for string handling
+library(sf)             #for state polylines (i think?)
+library(USAboundaries)  #for state polylines 
+#NOTE: USAboundaries is not on CRAN, you have to run the following command before re-deploying the app so shiny can find it (also had to sync github account)
+#devtools::install_github('USAboundaries')
+#rsconnect::deployApp()
 
 #access the zipcode database in the 'zipcode' package
 data(zipcode)
+
+#access the R build-in dataset to get rough state centroids (needed to display virtual Mobilize events)
+data("state")
+
+# Check that USAboundariesData is available, since it is not on CRAN
+#avail <- requireNamespace("USAboundariesData", quietly = TRUE)
+#https://github.com/rstudio/rsconnect/issues/88 <-- was trying to follow this to get USAboundaries to deploy
+
 
 #viewing mode (non-interactive replacement for input$radio)
 strViewingMode = 'friendly'
@@ -26,8 +39,12 @@ strViewingMode = 'friendly'
 kmPerMile = 1.60934  # [km] / [mi]
 kmPerDegree = 111.1    # [km] / [lat/long degree]
 milesPerDegree = kmPerDegree / kmPerMile
+meterPerMile = 1609.34
 mileSliderMin = 50
 mileSliderMax = 1000
+
+#image location since addControl() doesn't allow local files
+strIconUrl = "https://images.squarespace-cdn.com/content/v1/5c592d60797f74738f73856a/1549365622348-3C1K2ND1Z4UFPYUDV652/ke17ZwdGBToddI8pDm48kKXbTL5U8xV7KgHrzqU-XYBZw-zPPgdn4jUwVcJE1ZvWEtT5uBSRWt4vQZAgTJucoTqqXjS3CfNDSuuf31e0tVHYShtqp9p317BEUKra4SA7joXG0jEu6ntXNgZ58T98lRur-lC0WofN0YB1wFg-ZW0/Field-Team-Six-01cXXBadg.png"
 
 #colors
 strColorRepublican  = '#8b0000' 
@@ -39,6 +56,7 @@ strColorNone = '#BEBEBE'
 strFieldTeam6Webpage = '#02013C'
 strColorAqua = '#67DFFF' #used for table title
 strColorSalmon = '#FA8072'
+strFieldTeam6Logo = '#72A696'
 
 #create detailed view class descriptions
 strClassDescriptions = ''
@@ -93,7 +111,7 @@ dfDistrictCentroids <- data.frame(GEOID=dfDistricts$GEOID,
 
 #fix datatype
 #dfDistricts@data$TARGETCLASS <- dplyr::mutate_if(dfDistricts@data$TARGETCLASS, is.factor, as.numeric)
-dfDistricts$TARGETCLASS <- as.numeric(levels(dfDistricts$TARGETCLASS))[dfDistricts$TARGETCLASS]
+##dfDistricts$TARGETCLASS <- as.numeric(levels(dfDistricts$TARGETCLASS))[dfDistricts$TARGETCLASS] 2019-11-16 got rid of this
 
 #create list of geoids (defines a district)
 lsDistrictGeoids <- dfDistricts@data['GEOID']
@@ -105,11 +123,16 @@ dfDistricts$LABEL <- paste('<strong>', levels(districtsDataFrameSimple$DISTRICT)
 #districtInfo <- cbind(districtsDataFrameSimple@data['GEOID']) #, districtsDataFrameSimple@data['NAMELSAD'])
 #districtInfo[sapply(districtInfo['GEOID'], substring, 3,4)=="ZZ"]<-NA
 
+#get state polygons for the 10 battleground states
+#"Arizona", "Colorado", "Florida", "Georgia", "Iowa", "Maine", "Michigan", "North Carolina", "Pennsylvania", "Wisconsin"
+mpBattlegroundStates <- USAboundaries::us_states(states = c("Arizona", "Colorado", "Florida", "Georgia", "Iowa", "Maine", "Michigan", "North Carolina", "Pennsylvania", "Wisconsin"))
+
 #pull in mobilize event data in a dataframe using mobilize API 
 #https://github.com/mobilizeamerica/api/blob/master/README.md
 #result <- GET("https://api.mobilize.us/v1/organizations/1255/events?zipcode=90024&max_dist=50") #pull events within zipcode & max_dist for printing ?
 
-result <- GET("https://api.mobilize.us/v1/organizations/1255/events?timeslot_start=gte_now") #pull all future events
+#for some reason, you have to query for each type of event to get the full list... bug???
+result <- GET("https://api.mobilize.us/v1/organizations/1255/events?timeslot_start=gte_now&per_page=1000") #pull all future events
 lsMobilizeEvents <- httr::content(result)
 
 #lsMobilizeEvents <- lapply(lsMobilizeEvents$data, function(x) { x$timeslot_count <- length(x$timeslots); return(x) })
@@ -164,6 +187,16 @@ for (i in 1:intEvents) {
     lsMobilizeEvents$data[[i]]$max_end_date <- as.character(as.Date(as.POSIXct(as.numeric(as.character(intMaxEndDate)),origin="1970-01-01",tz=strEventTimezone)))
   }
   
+  #if the event doesn't have a lat long, set it
+  #2019-11-16 -- left off working on this problem:
+  # virtual events do have any state affiliations other than in text in the title
+  # no way to add it to the center of the state if it is not affiliated
+  #if (is.na(lsMobilizeEvents$data[[i]]$location)) {
+  #  lsMobilizeEvents$data[[i]]$location$location$longitude <- state.center$x[state.abb=='CA']
+  #  lsMobilizeEvents$data[[i]]$location$location$latitude <- state.center$y[state.abb=='CA']
+  #}
+  
+  
 } #end of loop through events
 
 
@@ -189,20 +222,20 @@ lsMobilizeEventsTrim <- lapply(lsMobilizeEventsFlat, function(x) { x[c('id',
 lsMobilizeEventsTrim <- lapply(lsMobilizeEventsTrim, setNames, nm = c('ID', 'TITLE', 'EVENT_TYPE', 'TIMESLOT_COUNT', 'MIN_START_DATE', 'MAX_END_DATE', 'DATE_LIST', 'LATITUDE', 'LONGITUDE', 'CITY', 'STATE', 'URL'))
 
 #convert list of lists into a matrix
-matMoblizeEvents <- do.call("rbind", lsMobilizeEventsTrim)
+matMobilizeEvents <- do.call("rbind", lsMobilizeEventsTrim)
 
 #convert matrix into a dataframe
-dfMobilizeEvents <- as.data.frame(matMoblizeEvents)
+dfMobilizeEvents <- as.data.frame(matMobilizeEvents)
 
 #get rid of all events with no lat/longs, because we can't display them on the map
-#TODO: add lat longs from the cities
+#TODO: add lat longs from the cities ????
 dfMobilizeEvents <- dfMobilizeEvents[!is.na(dfMobilizeEvents$LATITUDE) & !is.na(dfMobilizeEvents$LONGITUDE), ]
 
 #make sure the coords are numeric
 dfMobilizeEvents$LONGITUDE <- as.numeric(levels(dfMobilizeEvents$LONGITUDE))[dfMobilizeEvents$LONGITUDE] #as.numeric(dfMobilizeEvents$longitude)
 dfMobilizeEvents$LATITUDE <- as.numeric(levels(dfMobilizeEvents$LATITUDE))[dfMobilizeEvents$LATITUDE]
 
-dfMobilizeEvents$EVENT_TYPE <- str_replace(dfMobilizeEvents$EVENT_TYPE, '_', ' ')
+dfMobilizeEvents$EVENT_TYPE <- stringr::str_replace(dfMobilizeEvents$EVENT_TYPE, '_', ' ')
 #dfMobilizeEvents$LABEL <- paste('<strong>', levels(dfMobilizeEvents$EVENT_TYPE)[dfMobilizeEvents$EVENT_TYPE], '</strong>')
 dfMobilizeEvents$LABEL <- paste('<strong>', dfMobilizeEvents$EVENT_TYPE, '</strong>')
 

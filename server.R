@@ -269,6 +269,39 @@ shinyServer(
 
         #print(districtDistances[districtDistances$GEOID=="0608"])
         
+        #-----------------------------------------------------------------------------------------------------------------------------
+        #ANOTHER WAY TO DO IT USING dist2Line
+        #-----------------------------------------------------------------------------------------------------------------------------
+        
+        if(FALSE) {
+          
+          #https://gis.stackexchange.com/questions/169599/extract-all-the-polygon-coordinates-from-a-spatialpolygonsdataframe
+          #(1) convert SpatialPolygonsDataFrame to SpatialLinesDataFrame
+          dfDistrictsLines <- sp::coordinates(as(dfDistricts, "SpatialLinesDataFrame"))
+          #geosphere::dist2Line(c(-97.75013, 34.58659), temp[[440]][[1]])
+          
+          #(2) generate list of distance between the user's lat long and the closest point in each SpatialLinesDataFrame
+          #lsDistrictDistancesRaw <- lapply(dfDistrictsLines, function(x) {geosphere::dist2Line(userLatLong, x[[1]])})
+          x <- dfDistrictsLines
+          userLongLat <- cbind(as.numeric(zipcodeInfo['longitude']), as.numeric(zipcodeInfo['latitude']))
+          lsDistrictDistancesRaw <- lapply(seq_along(x), function(i) cbind(GEOID=dfDistricts@data$GEOID[[i]],
+                                                                           USERDIST=as.double(geosphere::dist2Line(userLongLat, x[[i]][[1]])[1,'distance'])
+                                                                           )
+                                           )
+          ##test with real lat/long
+          #lsDistrictDistancesRaw <- lapply(seq_along(x), function(i) cbind(GEOID=dfDistricts@data$GEOID[[i]],
+          #                                                                 USERDIST=as.double(geosphere::dist2Line(c(-97.75013, 34.58659), x[[i]][[1]])[1,'distance'])
+          #                                                                 )
+          #                                 )
+          
+          #put the geoid and userdist into a dataframe
+          lsDistrictDistances <-  do.call(rbind, lsDistrictDistancesRaw)
+          
+          districtDistances <- data.frame(GEOID=lsDistrictDistances[,'GEOID'], 
+                                          USERDIST=lsDistrictDistances[,'USERDIST']/meterPerMile)
+        }
+        #-----------------------------------------------------------------------------------------------------------------------------
+        
         #if a user's district is large, it is possible the centroid of their district is too far from their zipcode for the district 
         #to be included in even the smallest specified range. set the user's district to be 0 miles away to ensure it is always included. 
         userLocation <- data.frame(Longitude = c(userLatLong[1,2]), Latitude =c(userLatLong[1,1]) )
@@ -545,6 +578,7 @@ shinyServer(
                         addTiles(attribution = paste("| <a href=\"https://catalog.data.gov/harvest/116th-congressional-district\">District Map Data</a>",
                                                      "| <a href=\"http://clerk.house.gov/member_info/\">House Data</a>",
                                                      "| <a href=\"https://www.senate.gov/general/contact_information/senators_cfm.cfm\">Senate Data</a>",
+                                                     "| <a href=\"https://www.mobilize.us\">MobilizeAmerica</a> Events",
                                                      "| Priority analysis by Jason Berlin")
                         ) %>%
                         fitBounds(-120, 25, -75, 50) %>% #contiguous 48
@@ -558,8 +592,8 @@ shinyServer(
         
                                     #highlight districts upon mouseover
                                     highlight = highlightOptions(
-                                        weight = 4,
-                                        color = "black"
+                                        weight = 4 #,
+                                        #color = "black"
                                     ),  
                                     
                                     #add HTML formatted label info upon mouseover
@@ -576,6 +610,14 @@ shinyServer(
                         #           color='green',
                         #           fillOpacity = 1
                         #           ) %>%
+          
+                        #add battleground states
+                        addPolylines(data = mpBattlegroundStates,
+                                    stroke = TRUE, 
+                                    weight = 5,        #heavy (rest of map has lighter lines)
+                                    color = 'black',   #black (rest of map is blue)
+                                    opacity = 1.0      #opaque (rest of map is <1.0)
+                                    ) %>%
           
                         #add event markers (load all of them at once)
                         addMarkers(layerId = dfMobilizeEvents$ID, #layerId is returned during a click event
@@ -594,9 +636,23 @@ shinyServer(
                                    #   direction = "auto")
                                    ) %>% 
                         #addLegend("bottomright", pal = pal, values = c(1,2,3,4,5,6,7,8,9,10,11,12), title = "Target Class", opacity = 0.3)   
-                        addLegend("bottomright", pal = pal, values = c('HIGHEST','HIGHER','HIGH' ), title = "PRIORITY", opacity = 0.3)
-                        
-                        
+                        #addControl(html = paste("<img src='" , file.path(getwd(), 'fieldteam6_icon.png'), "'>Field Team 6 Event"), position = "bottomleft") 
+                        addLegendCustom(colors = c("white", "white"), 
+                                        labels = c("Congressional District", "FT6 Battleground State"), 
+                                        sizes = c(15, 15), 
+                                        shapes = c("square", "square"), 
+                                        borders = c("blue", "black"),
+                                        fontsize = '11px',
+                                        position = "bottomright",
+                                        opacity = 1.0)  %>%
+                        addControl(html = paste("<img src='" , strIconUrl, "'; width=20px;style='border:10px solid black'>  FT6 Event"), 
+                                   position = "bottomright")  %>%
+                        addLegend(pal = pal, 
+                                  values = c('HIGHEST','HIGHER','HIGH' ), 
+                                  title = "PRIORITY", 
+                                  opacity = 0.3, 
+                                  position = "bottomright")
+       
     })
     
     #normal field team 6 icon
@@ -705,7 +761,6 @@ shinyServer(
       #set priority description (text displayed under mission if friendly view)
       #REPLACED WITH strClassDescFriendly
       ##strPriorityDesc = if (df$PRIORITY=='') strPriorityDescriptions['NOT PRIORITIZED'] else strPriorityDescriptions[as.character(df$PRIORITY)]
-      
       #set target class description (text displayed under mission if detailed view)
       strClassDesc = if(df$TARGETCLASS==99) '' else paste('This class includes ', strClassDescriptions[as.numeric(df$TARGETCLASS)])
       
@@ -955,7 +1010,7 @@ shinyServer(
             removeGeoid <- v$clickedGeoIdPrev #previously selected geoid
             df <- dfDistricts[dfDistricts@data$GEOID==removeGeoid, ] #dataframe for the previously selected geoid
             
-            #reset polygon to have same formatting as the rest of the map
+            #reset polygon and polylines to have same formatting as the rest of the map
             #NOTE: there can only ever be one polygon for a given layerId, so this technically redraws/overwrites the polygon 
             leafletProxy( mapId = "usmap" ) %>%
                 addPolygons(data = df, 
@@ -970,8 +1025,8 @@ shinyServer(
                             
                             #highlight districts upon mouseover
                             highlight = highlightOptions(
-                                weight = 4,
-                                color = "black"
+                                weight = 4#,
+                                #color = "black"
                             ),  
                              
                             #add HTML formatted label info when mouseover
@@ -982,7 +1037,14 @@ shinyServer(
                                 direction = "auto"
                             )
                             #let it use the default style just like original map
-                            )
+                            ) %>%
+              #if you don't do this, the blue district lines will redraw over the black state lines, if they share a border
+              addPolylines(data = mpBattlegroundStates,
+                           stroke = TRUE, 
+                           weight = 5,        #heavy (rest of map has lighter lines)
+                           color = 'black',   #black (rest of map is blue)
+                           opacity = 1.0      #opaque (rest of map is <1.0)
+              )
         }
         #highlight the newly selected polygon
         if( is.null( v$clickedGeoIdNew ) ){ 
@@ -1002,8 +1064,8 @@ shinyServer(
                             fillOpacity = 0.3, 
                             stroke = TRUE, 
                             weight = 4,        #heavy (rest of map has lighter lines)
-                            color = 'black',   #black (rest of map is blue)
-                            opacity = 1.0,     #opaque (rest of map is <1.0)
+                            #color = 'black',   #black (rest of map is blue)
+                            opacity = 1.0,     #opaque but keep as blue default (rest of map is <1.0)
                             
                             #no need to highlight upon mouseover while selected
                             
@@ -1150,6 +1212,30 @@ shinyServer(
             }
         
     } #end of renderEventSelectionInTable
+    
+    
+    #function to build a custom legend
+    #added location but otherwise copied directly from
+    #https://stackoverflow.com/questions/52812238/custom-legend-with-r-leaflet-circles-and-squares-in-same-plot-legends
+    addLegendCustom <- function(map, colors, labels, sizes, shapes, borders, fontsize = '14px', position = 'bottomright', opacity = 0.5){
+      
+      make_shapes <- function(colors, sizes, borders, shapes) {
+        shapes <- gsub("circle", "50%", shapes)
+        shapes <- gsub("square", "0%", shapes)
+        paste0(colors, "; width:", sizes, "px; height:", sizes, "px; border:3px solid ", borders, "; border-radius:", shapes)
+      }
+      make_labels <- function(sizes, labels) {
+        paste0("<div style='display: inline-block;height: ", 
+               sizes, "px;margin-top: 4px;line-height: ", 
+               sizes, "px;font-size: ",
+               fontsize, "'>", labels, "</div>")
+      }
+      
+      legend_colors <- make_shapes(colors, sizes, borders, shapes)
+      legend_labels <- make_labels(sizes, labels)
+      
+      return(addLegend(map, colors = legend_colors, labels = legend_labels, opacity = opacity, position = position))
+    }
 
 
 

@@ -35,13 +35,21 @@ shinyUI(
                      fluidRow(
                          column(3,
                                 textInput("zipcode", 
-                                   lapply(paste("1. Enter your <span style='color:", strFieldTeam6Webpage, ";font-weight:bold'>zipcode</span>"), HTML)
+                                   lapply(paste("<span style='color:black'>1. </span>",
+                                                "<span style='font-weight:normal'>Enter your </span>",
+                                                "<span style='color:", strFieldTeam6Webpage, ";font-weight:bold'>zipcode</span>"
+                                                ), 
+                                          HTML)
                                    )
                                 
                                 ),
                          column(4,
                                 sliderInput("miles",
-                                     lapply(paste("2. Choose your <span style='color:", strFieldTeam6Webpage, ";font-weight:bold'>travel range</span> (miles):"),HTML),
+                                     lapply(paste("<span style='color:black'>2. </span>",
+                                                  "<span style='font-weight:normal'>Choose your </span>",
+                                                  "<span style='color:", strFieldTeam6Webpage, ";font-weight:bold'>travel range</span> (miles):"
+                                                  ),
+                                            HTML),
                                      min = mileSliderMin,
                                      max = mileSliderMax,
                                      value = mileSliderMin,
@@ -50,7 +58,8 @@ shinyUI(
                                 ),
                          column(3,
                                 #tags$b("3. Scroll down to find a list of <span style='color:blue;font-weight:bold'>nearby events</span>, or click on any district to <span style='color:blue;font-weight:bold'>learn more about the elections</span> Field Team 6 is targeting.")
-                                lapply(paste("3. Scroll down to find a list of <span style='color:",
+                                lapply(paste("<span style='color:black;font-weight:bold'>3. </span>",
+                                             "Scroll down to find a list of <span style='color:",
                                              strFieldTeam6Webpage, 
                                              ";font-weight:bold'>nearby events</span>, or click on any district to <span style='color:",
                                              strFieldTeam6Webpage, 
