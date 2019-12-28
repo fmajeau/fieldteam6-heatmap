@@ -48,13 +48,16 @@ districtsRepInfo$NAME_HOUSE <- apply(districtsRepInfo, 1, FUN = function(x) if(x
 districtsRepInfo$PARTY_HOUSE <- districtsRepInfo$Party #rename to all caps to fit convention of target dataframe
 districtsRepInfo$DISTRICT <- paste(districtsRepInfo$STATEPOSTAL, districtsRepInfo$CD116FP, sep='-') #create readable district label 
 
-#fix NC-03, NC-09, PA-12
-districtsRepInfo$NAME_HOUSE[districtsRepInfo$DISTRICT=='NC-03'] <- "Allen Thomas [Special Election]" #Sept 10th 2019
-districtsRepInfo$PARTY_HOUSE[districtsRepInfo$DISTRICT=='NC-03'] <- "D"
-districtsRepInfo$NAME_HOUSE[districtsRepInfo$DISTRICT=='NC-09'] <- "Dan McCready [Special Election]" #Sept 10th 2019
-districtsRepInfo$PARTY_HOUSE[districtsRepInfo$DISTRICT=='NC-09'] <- "D"
+#manually fix NC-03, NC-09, PA-12
+#districtsRepInfo$NAME_HOUSE[districtsRepInfo$DISTRICT=='NC-03'] <- "Allen Thomas [Special Election]" #Sept 10th 2019 (lost race, so got rid of this adjustment)
+#districtsRepInfo$PARTY_HOUSE[districtsRepInfo$DISTRICT=='NC-03'] <- "D"
+#districtsRepInfo$NAME_HOUSE[districtsRepInfo$DISTRICT=='NC-09'] <- "Dan McCready [Special Election]" #Sept 10th 2019 (lost race, so got rid of this adjustment)
+#districtsRepInfo$PARTY_HOUSE[districtsRepInfo$DISTRICT=='NC-09'] <- "D"
 districtsRepInfo$NAME_HOUSE[districtsRepInfo$DISTRICT=='PA-12'] <- "Fred Keller" #recently elected, not yet listed in clerk's office file
 districtsRepInfo$PARTY_HOUSE[districtsRepInfo$DISTRICT=='PA-12'] <- "R"
+districtsRepInfo$NAME_HOUSE[districtsRepInfo$DISTRICT=='CA-25'] <- "the Democratic Candidate" #due to Katie Hill resignation 
+districtsRepInfo$PARTY_HOUSE[districtsRepInfo$DISTRICT=='CA-25'] <- "D"
+
 
 #create district map
 districtGeoidMap = subset(districtsRepInfo, select = c('GEOID', 'STATEPOSTAL', 'CD116FP'))
@@ -146,7 +149,7 @@ dfRepInfo$COLOR_SENATE.y[dfRepInfo$SENATEINPLAY==0] <- 'grey'
 dfRepInfo$COLOR_PRESIDENCY[dfRepInfo$PRESIDENCYINPLAY==1] <- 'red'
 dfRepInfo$COLOR_PRESIDENCY[dfRepInfo$PRESIDENCYINPLAY==0] <- 'grey'
 
-#-----------------------------------------------------------------------------------------------------------------------------------------------
+#-------------------------------------s----------------------------------------------------------------------------------------------------------
 # SET FIELD TEAM 6 MISSION (sidebar info) ----
 #-----------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -154,7 +157,7 @@ dfRepInfo$COLOR_PRESIDENCY[dfRepInfo$PRESIDENCYINPLAY==0] <- 'grey'
 #HOUSE -- add Field Team 6 mission based on whether the house seat is in play
 dfRepInfo$MISSION_HOUSE[dfRepInfo$HOUSEINPLAY==1 & dfRepInfo$PARTY_HOUSE=='R'] <- 'BOOT'
 dfRepInfo$MISSION_HOUSE[dfRepInfo$HOUSEINPLAY==1 & dfRepInfo$PARTY_HOUSE=='D'] <- 'PROTECT'
-dfRepInfo$MISSION_HOUSE[grepl('Special',dfRepInfo$NAME_HOUSE)] <- 'ELECT'
+dfRepInfo$MISSION_HOUSE[grepl('Candidate',dfRepInfo$NAME_HOUSE)] <- 'ELECT'
 
 dfRepInfo$MISSION_HOUSE <- apply(dfRepInfo, 1, 
                                  FUN = function(x) if(x['HOUSEINPLAY']==0) '' else paste(x['MISSION_HOUSE'], ' ', 
@@ -165,7 +168,7 @@ dfRepInfo$MISSION_HOUSE <- apply(dfRepInfo, 1,
                                  FUN = function(x) if(grepl('Special Election', x['NAME_HOUSE'])) paste('ELECT ', 
                                                                                  x['NAME_HOUSE'], 
                                                                                  ' (', x['PARTY_HOUSE'], ')', sep='') else x['MISSION_HOUSE'])
-                     
+
 #SENATE -- add Field Team 6 mission based on whether the senate seat is in play
 dfRepInfo$MISSION_SENATE <- ""
 dfRepInfo$MISSION_SENATE[dfRepInfo$SENATEINPLAY==1 & dfRepInfo$PARTY_SENATE.x=='R'] <- 'BOOT'
@@ -238,6 +241,7 @@ if(FALSE) {
 districtsDataFrameSimpleInfo <- merge(districtsDataFrameSimpleRaw, dfRepInfo, by='GEOID')
 districtsDataFrameSimpleInfo[is.na(districtsRepInfo$STATEPOSTAL)] <- "N/A"
 
+
 #-----------------------------------------------------------------------------------------------------------------------------------------------
 # CLEANUP DATAFRAME & SAVE TO JSON FILE ----
 #-----------------------------------------------------------------------------------------------------------------------------------------------
@@ -247,6 +251,11 @@ districtsDataFrameSimple = districtsDataFrameSimpleInfo
 #NOTE: this does not remove the values from each level, but it does remove the data rows
 #(i.e. 441 polygons, data sets etc, but still 444 geoid levels)
 districtsDataFrameSimple <- districtsDataFrameSimple[districtsDataFrameSimple@data$NAMELSAD!="Congressional Districts not defined", ]
+
+#remove "Delegate Districts, same method as above
+districtsDataFrameSimple <- districtsDataFrameSimple[districtsDataFrameSimple@data$NAMELSAD!="Delegate District (at Large)", ]
+districtsDataFrameSimple <- districtsDataFrameSimple[districtsDataFrameSimple@data$NAMELSAD!="Resident Commissioner District (at Large)", ]
+
 
 #write to new file so we can load that instead and it will take less time to load
 #takes SpatialPolygonsDataFrame, among other spatial objects
