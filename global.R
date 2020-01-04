@@ -16,6 +16,7 @@ library(httr)           #to interact with mobilize api
 library(rlist)          #to perform list flattening
 library(stringr)        #for string handling
 library(sf)             #for state polylines (i think?)
+library(readr)          #read rds file
 library(USAboundaries)  #for state polylines 
 #NOTE: USAboundaries is not on CRAN, you have to run the following command before re-deploying the app so shiny can find it (also had to sync github account)
 #devtools::install_github('USAboundaries')
@@ -99,7 +100,7 @@ strClassDescriptionsFriendly[99] <- 'Registering democrats is unlikely to affect
 #strClassDescriptionsFriendly <- stringr::str_replace_all(strClassDescriptionsFriendly, '9', '&nbsp;') #strpad won't take pad of > 1 char
 
 #read in json file into a SpatialPolygonsDataFrame
-districtsDataFrameSimple <- rgdal::readOGR("tl_2018_us_cd116_simplified.json", verbose = TRUE) #returns a SpatialPolygonsDataFrame
+districtsDataFrameSimple <- readr::read_rds(file.path(getwd(), "tl_2018_us_cd116_simplified.rds"))
 
 #rename for clarity in ui and server scripts
 dfDistricts <- districtsDataFrameSimple #districtPolygons

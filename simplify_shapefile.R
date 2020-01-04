@@ -3,6 +3,7 @@ library(rgeos)   #simplify polygons so map loads faster
 library(tigris)  #convert fips code
 library("XML")   #parse the senate info
 library(stringr) #pad numbers
+library(readr)   #write to rds file
 
 #-----------------------------------------------------------------------------------------------------------------------------------------------
 # GET & SIMPLIFY SPATIALPOLYGONS DATAFRAME ----
@@ -256,12 +257,9 @@ districtsDataFrameSimple <- districtsDataFrameSimple[districtsDataFrameSimple@da
 districtsDataFrameSimple <- districtsDataFrameSimple[districtsDataFrameSimple@data$NAMELSAD!="Delegate District (at Large)", ]
 districtsDataFrameSimple <- districtsDataFrameSimple[districtsDataFrameSimple@data$NAMELSAD!="Resident Commissioner District (at Large)", ]
 
-
-#write to new file so we can load that instead and it will take less time to load
-#takes SpatialPolygonsDataFrame, among other spatial objects
-path = file.path(getwd(), "tl_2018_us_cd116_simplified.json")
-rgdal::writeOGR(districtsDataFrameSimple, path, layer="", driver="GeoJSON")
-districtsDataFrameSimpleReadTest <- rgdal::readOGR("tl_2018_us_cd116_simplified.json", verbose = TRUE) #returns a SpatialPolygonsDataFrame
+#save SpatialPolygonsDataFrame as a rds (stores any R object) which is included in deployment & loaded directly in global.R
+readr::write_rds(districtsDataFrameSimple, path = file.path(getwd(), "tl_2018_us_cd116_simplified.rds"))
+districtsDataFrameSimpleReadTest <- readr::read_rds(file.path(getwd(), "tl_2018_us_cd116_simplified.rds"))
 
 #check length of districtsPolygons vs districtsPolygonsSimple (make sure nothing has been simplified out)
 numDistricts = length(districtsDataFrame@data[[1]])
