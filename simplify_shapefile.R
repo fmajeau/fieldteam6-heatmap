@@ -244,18 +244,23 @@ districtsDataFrameSimpleInfo[is.na(districtsRepInfo$STATEPOSTAL)] <- "N/A"
 
 
 #-----------------------------------------------------------------------------------------------------------------------------------------------
-# CLEANUP DATAFRAME & SAVE TO JSON FILE ----
+# CLEANUP DATAFRAME & SAVE TO RDS FILE ----
 #-----------------------------------------------------------------------------------------------------------------------------------------------
 districtsDataFrameSimple = districtsDataFrameSimpleInfo
 
 #remove the three N/A polygons from the dataframe & their associated information
-#NOTE: this does not remove the values from each level, but it does remove the data rows
-#(i.e. 441 polygons, data sets etc, but still 444 geoid levels)
+#NOTE: this does not remove the values from each level, but it does remove the data rows (e.g. 441 data rows, but still 444 geoid levels)
 districtsDataFrameSimple <- districtsDataFrameSimple[districtsDataFrameSimple@data$NAMELSAD!="Congressional Districts not defined", ]
 
 #remove "Delegate Districts, same method as above
+#NOTE: this does not remove the values from each level, but it does remove the data rows (e.g. 435 data rows, but still 444 geoid levels)
+#(e.g. 435 data rows, but still 444 geoid levels)
 districtsDataFrameSimple <- districtsDataFrameSimple[districtsDataFrameSimple@data$NAMELSAD!="Delegate District (at Large)", ]
 districtsDataFrameSimple <- districtsDataFrameSimple[districtsDataFrameSimple@data$NAMELSAD!="Resident Commissioner District (at Large)", ]
+
+#remove the levels that are no longer relevant after subsetting
+#NOTE: this DOES remove the levels referenced in the notes above (e.g. 435 data rows & 435 geoid levels)
+districtsDataFrameSimple@data <- droplevels(districtsDataFrameSimple@data)
 
 #save SpatialPolygonsDataFrame as a rds (stores any R object) which is included in deployment & loaded directly in global.R
 readr::write_rds(districtsDataFrameSimple, path = file.path(getwd(), "tl_2018_us_cd116_simplified.rds"))
