@@ -19,8 +19,8 @@ districtsDataFrame <- rgdal::readOGR(dsn = path.expand("tl_2018_us_cd116.json"),
 
 #simplify the polygons from the original json file so they load much faster in the viewer
 #--takes SpatialPolygonsDataframe object
-#--tol of 0.01 seems to reduce number of coords to less than 1% 0.007
-districtsPolygonsSimple = rgeos::gSimplify(districtsDataFrame, 0.006, topologyPreserve = TRUE) 
+#--tol of 0.01 reduces size of object to about 10% of original (higher tolerance reduces it further, but districts start to become too jagged)
+districtsPolygonsSimple = rgeos::gSimplify(districtsDataFrame, 0.01, topologyPreserve = TRUE) 
 
 #save the simplified polygons in a dataframe for use by leaflet
 #will be in the same order, according to documentation, unless a whole polygon is dropped
