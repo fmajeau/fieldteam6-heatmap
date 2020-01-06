@@ -33,6 +33,10 @@ data("state")
 #https://github.com/rstudio/rsconnect/issues/88 <-- was trying to follow this to get USAboundaries to deploy
 
 
+# ------------------------------------------------------------------------------------------------------------------------------------
+# CONSTANTS & STRINGS 
+# ------------------------------------------------------------------------------------------------------------------------------------
+
 #viewing mode (non-interactive replacement for input$radio)
 strViewingMode = 'friendly'
 
@@ -99,6 +103,10 @@ strClassDescriptionsFriendly[99] <- 'Registering democrats is unlikely to affect
 #strClassDescriptionsFriendly <- stringr::str_pad(strClassDescriptionsFriendly, intMaxStrLength, 'right', '9') 
 #strClassDescriptionsFriendly <- stringr::str_replace_all(strClassDescriptionsFriendly, '9', '&nbsp;') #strpad won't take pad of > 1 char
 
+# ------------------------------------------------------------------------------------------------------------------------------------
+# PRE-PROCESS DISTRICT POLYGONS
+# ------------------------------------------------------------------------------------------------------------------------------------
+
 #read in json file into a SpatialPolygonsDataFrame
 districtsDataFrameSimple <- readr::read_rds(file.path(getwd(), "tl_2018_us_cd116_simplified.rds"))
 
@@ -117,8 +125,8 @@ dfDistrictCentroids <- data.frame(GEOID=dfDistricts$GEOID,
 #create list of geoids (defines a district)
 lsDistrictGeoids <- dfDistricts@data['GEOID']
 
-#create label
-dfDistricts$LABEL <- paste('<strong>', levels(districtsDataFrameSimple$DISTRICT)[districtsDataFrameSimple$DISTRICT], '</strong>')
+#create label for districts (e.g. CA-12)
+dfDistricts$LABEL <- paste('<strong>', districtsDataFrameSimple$DISTRICT, '</strong>')
 
 #create matrix with district info keyed on geoid using google drive persistent storage (USING PROXY UNTIL GOOGLE DRIVE IS SET UP )
 #districtInfo <- cbind(districtsDataFrameSimple@data['GEOID']) #, districtsDataFrameSimple@data['NAMELSAD'])
@@ -128,12 +136,20 @@ dfDistricts$LABEL <- paste('<strong>', levels(districtsDataFrameSimple$DISTRICT)
 #"Arizona", "Colorado", "Florida", "Georgia", "Iowa", "Maine", "Michigan", "North Carolina", "Pennsylvania", "Wisconsin"
 mpBattlegroundStates <- USAboundaries::us_states(states = c("Arizona", "Colorado", "Florida", "Georgia", "Iowa", "Maine", "Michigan", "North Carolina", "Pennsylvania", "Wisconsin"))
 
+# ------------------------------------------------------------------------------------------------------------------------------------
+# PRE-PROCESS MOBILIZE EVENTS
+# ------------------------------------------------------------------------------------------------------------------------------------
+#creates dfMobilizeEvents to be used by server.R
+# -- The only fields used for the map are ID, LATITUDE, LONGITUDE, LABEL
+# -- All other fields used for the table display
+
+
 #pull in mobilize event data in a dataframe using mobilize API 
 #https://github.com/mobilizeamerica/api/blob/master/README.md
-#result <- GET("https://api.mobilize.us/v1/organizations/1255/events?zipcode=90024&max_dist=50") #pull events within zipcode & max_dist for printing ?
-
-#for some reason, you have to query for each type of event to get the full list... bug???
-result <- GET("https://api.mobilize.us/v1/organizations/1255/events?timeslot_start=gte_now&per_page=1000") #pull all future events
+# organization = 1255 <-- Field Team 6 org code
+# timeslot_start = gte_new <-- all future events 
+# per_page = 1000 <-- need large per_page number otherwise it will truncate your results
+result <- GET("https://api.mobilize.us/v1/organizations/1255/events?timeslot_start=gte_now&per_page=1000")
 lsMobilizeEvents <- httr::content(result)
 
 #lsMobilizeEvents <- lapply(lsMobilizeEvents$data, function(x) { x$timeslot_count <- length(x$timeslots); return(x) })
@@ -226,18 +242,42 @@ lsMobilizeEventsTrim <- lapply(lsMobilizeEventsTrim, setNames, nm = c('ID', 'TIT
 matMobilizeEvents <- do.call("rbind", lsMobilizeEventsTrim)
 
 #convert matrix into a dataframe
-dfMobilizeEvents <- as.data.frame(matMobilizeEvents)
+dfMobilizeEvents <- as.data.frame(matMobilizeEvents, stringsAsFactors=FALSE)
 
-#get rid of all events with no lat/longs, because we can't display them on the map
-#TODO: add lat longs from the cities ????
+#add lat/longs for all virtual events using the center of the state 
+dfMobilizeEventsVirtual <- dfMobilizeEvents[is.na(dfMobilizeEvents$LATITUDE) & is.na(dfMobilizeEvents$LONGITUDE) & is.na(dfMobilizeEvents$CITY), ]
+
+#loop through each virtual event and assign lat/longs and city/state so it will show up on the map
+for (i in 1:length(dfMobilizeEventsVirtual)) {
+  #use regex on the title to find the state that the virtual event is affiliated with
+  strTitle <- dfMobilizeEventsVirtual[i,]$TITLE[1]
+  m <- regexec("FLIPPIN'\\s((?:[A-Z]+\\s)+)-\\s", strTitle) #looks for and captures "FLIPPIN' {STATE NAME} - "
+  regmatches(strTitle, m)
+  strState <- regmatches(strTitle, m)[[1]][2] #grab the state name capture group
+  strState <- str_trim(str_to_title(strState)) #convert from "CALIFORNIA " to "California"
+  
+  #set the coordinates to be the center of the state
+  if(!is.na(strState)) {
+    dfMobilizeEvents$LATITUDE[dfMobilizeEvents$ID == dfMobilizeEventsVirtual[i,]$ID[1]] <- as.numeric(state.center$y[state.name==strState])
+    dfMobilizeEvents$LONGITUDE[dfMobilizeEvents$ID == dfMobilizeEventsVirtual[i,]$ID[1]] <- as.numeric(state.center$x[state.name==strState])
+  }
+  
+  #set the city and state to be (REMOTE), CA
+  dfMobilizeEvents$CITY[dfMobilizeEvents$ID == dfMobilizeEventsVirtual[i,]$ID[1]] <- '(REMOTE)'
+  dfMobilizeEvents$STATE[dfMobilizeEvents$ID == dfMobilizeEventsVirtual[i,]$ID[1]] <- state.abb[state.name==strState]
+  
+}
+
+#TODO: add lat/longs for all city based events with no specified lat longs
+
+#get rid of any events that still do not have lat/longs, because we can't display them on the map
 dfMobilizeEvents <- dfMobilizeEvents[!is.na(dfMobilizeEvents$LATITUDE) & !is.na(dfMobilizeEvents$LONGITUDE), ]
 
 #make sure the coords are numeric
-dfMobilizeEvents$LONGITUDE <- as.numeric(levels(dfMobilizeEvents$LONGITUDE))[dfMobilizeEvents$LONGITUDE] #as.numeric(dfMobilizeEvents$longitude)
-dfMobilizeEvents$LATITUDE <- as.numeric(levels(dfMobilizeEvents$LATITUDE))[dfMobilizeEvents$LATITUDE]
+dfMobilizeEvents$LONGITUDE <- as.numeric(dfMobilizeEvents$LONGITUDE)
+dfMobilizeEvents$LATITUDE <- as.numeric(dfMobilizeEvents$LATITUDE)
 
 dfMobilizeEvents$EVENT_TYPE <- stringr::str_replace(dfMobilizeEvents$EVENT_TYPE, '_', ' ')
-#dfMobilizeEvents$LABEL <- paste('<strong>', levels(dfMobilizeEvents$EVENT_TYPE)[dfMobilizeEvents$EVENT_TYPE], '</strong>')
 dfMobilizeEvents$LABEL <- paste('<strong>', dfMobilizeEvents$EVENT_TYPE, '</strong>')
 
 #create coordinates object
@@ -263,9 +303,6 @@ lsMobilizeEventIds <- dfMobilizeEvents@data['ID']
 #json$data[[24]]$location$location$latitude
 #json$data[[24]]$location$location$longitude
 #json$data[[24]]$location$congressional_district
-
-
-
 
 
 
