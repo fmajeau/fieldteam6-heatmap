@@ -1,10 +1,8 @@
 #
-# This is the user-interface definition of a Shiny web application. You can
-# run the application by clicking 'Run App' above.
+# This is the user-interface definition of a Shiny web application. You can run the application by clicking 'Run App' above.
+# Find out more about building applications with Shiny here: http://shiny.rstudio.com/
 #
-# Find out more about building applications with Shiny here:
-#
-#    http://shiny.rstudio.com/
+# Written by Fiona Majeau for Field Team 6
 #
 
 
@@ -17,7 +15,6 @@ shinyUI(
             tags$div(class="p", checked=NA,
                      tags$strong(style=paste('color:',strColorAqua),"Field Team 6 "),
                      tags$strong(style=paste('color:',strColorSalmon),"HEAT MAP"),
-                     #tags$em(),tags$em(),tags$em(),tags$em(),
                      tags$span(lapply('&nbsp;',HTML)),
                      tags$i(style=paste('color:','silver', ';font-size: 16px'),"Where America Needs Democrats Most")
                      
@@ -28,11 +25,13 @@ shinyUI(
         #set background color of entire page
         setBackgroundColor(strFieldTeam6Webpage),
         
-        #plot sidebar 
+        #plot header 
         sidebarPanel(
             width = 12,
+            #display user input fields
             tags$div(style="display:inline-block; width:100%; color:grey",
                      fluidRow(
+                         #zipcode user input
                          column(3,
                                 textInput("zipcode", 
                                    lapply(paste("<span style='color:black'>1. </span>",
@@ -43,6 +42,7 @@ shinyUI(
                                    )
                                 
                                 ),
+                         #travel range user input
                          column(4,
                                 sliderInput("miles",
                                      lapply(paste("<span style='color:black'>2. </span>",
@@ -56,8 +56,8 @@ shinyUI(
                                      ticks = FALSE
                                      )
                                 ),
+                         #user instructions
                          column(3,
-                                #tags$b("3. Scroll down to find a list of <span style='color:blue;font-weight:bold'>nearby events</span>, or click on any district to <span style='color:blue;font-weight:bold'>learn more about the elections</span> Field Team 6 is targeting.")
                                 lapply(paste("<span style='color:black;font-weight:bold'>3. </span>",
                                              "Scroll down to find a list of <span style='color:",
                                              strFieldTeam6Webpage, 
@@ -68,6 +68,7 @@ shinyUI(
                                        )
                                 
                                 ),
+                         #user reset button
                          column(2,
                                 tags$br(),
                                 actionButton("reset", tags$strong(style='color:silver',"Reset"), style='width:100%')
@@ -75,34 +76,7 @@ shinyUI(
                          
                      )
             ),
-            # textInput("zipcode",
-            #            "Enter your zipcode:"
-            # ),
-            # sliderInput("miles",
-            #             "Choose your travel range (miles):",
-            #             min = mileSliderMin,
-            #             max = mileSliderMax,
-            #             value = mileSliderMin
-            # ),
-            #tags$div(style="display:inline-block; width:100%",
-            #        fluidRow(
-            #            #column(6, actionButton("go", tags$strong(style=paste('color:', strColorDemocrat ),"Go"), style='width:100%')), #not build
-            #            #column(12, actionButton("reset", tags$strong(style='color:silver',"Reset"), style='width:100%'))
-            #        )
-            #),
-            #tags$p(""),
-            
-            #USED TO BE THIS, vertical alignment
-            #htmlOutput('clickedDistrictInfoHeader'),
-            #fluidRow(
-            #    column(6, 
-            #           htmlOutput('clickedDistrictInfoMission')
-            #    ),
-            #    column(6,
-            #           htmlOutput('clickedDistrictInfoDescription')
-            #    )
-            #),
-            
+            #display district info header subsection
             fluidRow(
                 column(6, 
                        htmlOutput('clickedDistrictInfoHeader')
@@ -114,175 +88,28 @@ shinyUI(
             htmlOutput('clickedDistrictInfoDescription')
         ),
     
-        #plot map and friendly/detailed view toggle
+        #plot map
         mainPanel(
             width = 12,
-            #prettyRadioButtons("radio", label=NULL, inline=TRUE,
-            #                   choiceNames = list(tags$strong(style = 'color:silver','FRIENDLY VIEW'), tags$strong(style = 'color:silver','DETAILED VIEW')  ), 
-            #                   choiceValues = list( 'friendly', 'detailed'),
-            #                   selected = 'friendly',
-            #                   shape = 'curve'),
-            leafletOutput("usmap", height = 450) #,
-            
-            # #display links to data sources below map (currently display in the map attributions instead)
-            # tags$div(class="p", style='font-size:9px', checked=NA,
-            #          tags$a(href="https://catalog.data.gov/harvest/116th-congressional-district", "Congressional District Map Data"),
-            #          tags$span(style='color:silver',"|"),
-            #          tags$a(href="http://clerk.house.gov/member_info/", "House Member Data"),
-            #          tags$span(style='color:silver',"|"),
-            #          tags$a(href="https://www.senate.gov/general/contact_information/senators_cfm.cfm", "Senate Member Data"),
-            #          tags$span(style='color:silver',"|"),
-            #          tags$span(style='color:grey', "Priority analysis by Jason Berlin"),
-            #          #tags$p(style='color:lightgrey', 'We apologize for bugs and appreciate your patience while this tool is still in development mode... improvements will occur regularly!')
-            #          tags$br(),
-            #          tags$br()
-            # )
+            leafletOutput("usmap", height = 450)
         ),
         
-        #plot events table
+        #display events table
         fluidRow(
             column(12, #table width (full width = 12)
                    dataTableOutput('events_datatable')
             )
         ),
         
-        #plot districts data table
+        #display districts data table
         fluidRow(
             column(12, #table width (full width = 12)
                    dataTableOutput('districts_datatable')
             )
         )
-        # #retain connection with websocket
-        # #from https://github.com/virtualstaticvoid/heroku-buildpack-r/issues/97
-        # tags$head(
-        #     HTML(
-        #         "<script>
-        #         var socket_timeout_interval
-        #         var n = 0
-        #         $(document).on('shiny:connected', function(event) {
-        #             socket_timeout_interval = setInterval(function(){
-        #                 Shiny.onInputChange('count', n++)
-        #                 }, 15000)
-        #             alert(event.socket.readyState)
-        #         });
-        #         $(document).on('shiny:disconnected', function(event) {
-        #             clearInterval(socket_timeout_interval)
-        #         });
-        #     </script>"
-        #     )
-        # )
     
     ) #end of fluidPage
     
     
             
 ) #end of shinyUI
-
-
-#HTML table display describing classes 
-#(feature of very first version, not using anymore)
-
-# tags$div(class="table", checked=NA,
-#          tags$table(style = "padding: 10%; width: 100%; rules: all",    
-#                     tags$tr(
-#                         tags$th("Target Class"),
-#                         tags$th(""),
-#                         tags$th("House"),
-#                         tags$th("Senate"),
-#                         tags$th("President")
-#                     ),
-#                     tags$tr(
-#                         tags$td(1),
-#                         tags$td(""),
-#                         tags$td('X (flip)'),
-#                         tags$td('X'),
-#                         tags$td('X')
-#                     ),
-#                     tags$tr(
-#                         tags$td(2),
-#                         tags$td(""),
-#                         tags$td('X (hold)'),
-#                         tags$td('X'),
-#                         tags$td('X')
-#                     ),
-#                     tags$tr(
-#                         tags$td(3),
-#                         tags$td(""),
-#                         tags$td('--'),
-#                         tags$td('X'),
-#                         tags$td('X')
-#                     ),
-#                     tags$tr(
-#                         tags$td(4),
-#                         tags$td(""),
-#                         tags$td('X (flip)'),
-#                         tags$td('--'),
-#                         tags$td('X')
-#                     ),
-#                     tags$tr(
-#                         tags$td(5),
-#                         tags$td(""),
-#                         tags$td('X (hold)'),
-#                         tags$td('--'),
-#                         tags$td('X')
-#                     ),
-#                     tags$tr(
-#                         tags$td(6),
-#                         tags$td(""),
-#                         tags$td('--'),
-#                         tags$td('--'),
-#                         tags$td('X')
-#                     ),
-#                     tags$tr(
-#                         tags$td(7),
-#                         tags$td(""),
-#                         tags$td('X (flip)'),
-#                         tags$td('X'),
-#                         tags$td('--')
-#                     ),
-#                     tags$tr(
-#                         tags$td(8),
-#                         tags$td(""),
-#                         tags$td('X (hold)'),
-#                         tags$td('X'),
-#                         tags$td('--')
-#                     ),
-#                     tags$tr(
-#                         tags$td(9),
-#                         tags$td(""),
-#                         tags$td('--'),
-#                         tags$td('X'),
-#                         tags$td('--')
-#                     ),
-#                     tags$tr(
-#                         tags$td(10),
-#                         tags$td(""),
-#                         tags$td('[state leg]'),
-#                         tags$td(''),
-#                         tags$td('')
-#                     ),
-#                     tags$tr(
-#                         tags$td(11),
-#                         tags$td(""),
-#                         tags$td('X (flip)'),
-#                         tags$td('--'),
-#                         tags$td('--')
-#                     ),
-#                     tags$tr(
-#                         tags$td(12),
-#                         tags$td(""),
-#                         tags$td('X (hold)'),
-#                         tags$td('--'),
-#                         tags$td('--')
-#                     ),
-#                     tags$tr(
-#                         tags$td(99),
-#                         tags$td(""),
-#                         tags$td('--'),
-#                         tags$td('--'),
-#                         tags$td('--')
-#                     )
-#          ),
-#          tags$p(""),
-#          tags$i("* X = seat is in play")
-# )

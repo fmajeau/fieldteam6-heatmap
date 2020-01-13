@@ -1,9 +1,25 @@
+#
+# This is the pre-processing file that generates the SpatialPolygonsDataFrame required by the heatmap shiny app.
+# Must be run in changes are made to any of the following files:
+#   -- simplify_shapefile.R (this file)
+#   -- tl_2018_us_cd116.json
+#   -- member_info_cd116.csv
+#   -- member_info_senate116.xml
+#   -- target_class.csv
+#
+# Written by Fiona Majeau for Field Team 6
+#
+
+
 library(rgdal)   #read geojson file
 library(rgeos)   #simplify polygons so map loads faster
 library(tigris)  #convert fips code
 library("XML")   #parse the senate info
 library(stringr) #pad numbers
 library(readr)   #write to rds file
+
+#this script generates an R object file of the SpatialPolygonsDataFrame required by the heatmap shiny app
+strOutputFileName <- "tl_2018_us_cd116_simplified.rds"
 
 #-----------------------------------------------------------------------------------------------------------------------------------------------
 # GET & SIMPLIFY SPATIALPOLYGONS DATAFRAME ----
@@ -31,7 +47,6 @@ districtsDataFrameSimpleRaw = SpatialPolygonsDataFrame(districtsPolygonsSimple, 
 #-----------------------------------------------------------------------------------------------------------------------------------------------
 #get house district member info (state postal code, CA, and district number, 46)
 districtsRepInfo <- read.csv("member_info_cd116.csv", header=TRUE)
-#districtsRepInfo <- XML::xmlToDataFrame("member_info_cd116.xml")
 
 #build state postal code and district number columns
 districtsRepInfo$STATEPOSTAL <- sapply(districtsRepInfo$St.Dis, substring, 1, 2)  #state postal code (XX of XX00)
@@ -50,10 +65,6 @@ districtsRepInfo$PARTY_HOUSE <- districtsRepInfo$Party #rename to all caps to fi
 districtsRepInfo$DISTRICT <- paste(districtsRepInfo$STATEPOSTAL, districtsRepInfo$CD116FP, sep='-') #create readable district label 
 
 #manually fix NC-03, NC-09, PA-12
-#districtsRepInfo$NAME_HOUSE[districtsRepInfo$DISTRICT=='NC-03'] <- "Allen Thomas [Special Election]" #Sept 10th 2019 (lost race, so got rid of this adjustment)
-#districtsRepInfo$PARTY_HOUSE[districtsRepInfo$DISTRICT=='NC-03'] <- "D"
-#districtsRepInfo$NAME_HOUSE[districtsRepInfo$DISTRICT=='NC-09'] <- "Dan McCready [Special Election]" #Sept 10th 2019 (lost race, so got rid of this adjustment)
-#districtsRepInfo$PARTY_HOUSE[districtsRepInfo$DISTRICT=='NC-09'] <- "D"
 districtsRepInfo$NAME_HOUSE[districtsRepInfo$DISTRICT=='PA-12'] <- "Fred Keller" #recently elected, not yet listed in clerk's office file
 districtsRepInfo$PARTY_HOUSE[districtsRepInfo$DISTRICT=='PA-12'] <- "R"
 districtsRepInfo$NAME_HOUSE[districtsRepInfo$DISTRICT=='CA-25'] <- "the Democratic Candidate" #due to Katie Hill resignation 
@@ -110,7 +121,6 @@ districtsTargetClass$CD116FP <- stringr::str_pad(districtsTargetClass$CD116FP,2,
 
 #merge with geoid map to get geoid
 districtsTargetClass = merge(districtsTargetClass, districtGeoidMap, by=c('CD116FP','STATEPOSTAL'))
-#districtsTargetClass$GEOID <- paste(districtsTargetClass$STATEPOSTAL, stringr::str_pad(districtsTargetClass$CD116FP,2,pad='0'), sep='')   #create geoid by concatenating postal & fips
 
 #add high/higher/highest priority level for friendly mode
 districtsTargetClass$PRIORITY <- ''
@@ -263,20 +273,17 @@ districtsDataFrameSimple <- districtsDataFrameSimple[districtsDataFrameSimple@da
 districtsDataFrameSimple@data <- droplevels(districtsDataFrameSimple@data)
 
 #save SpatialPolygonsDataFrame as a rds (stores any R object) which is included in deployment & loaded directly in global.R
-readr::write_rds(districtsDataFrameSimple, path = file.path(getwd(), "tl_2018_us_cd116_simplified.rds"))
-districtsDataFrameSimpleReadTest <- readr::read_rds(file.path(getwd(), "tl_2018_us_cd116_simplified.rds"))
+readr::write_rds(districtsDataFrameSimple, path = file.path(getwd(), strOutputFileName))
+districtsDataFrameSimpleReadTest <- readr::read_rds(file.path(getwd(), strOutputFileName))
 
-#check length of districtsPolygons vs districtsPolygonsSimple (make sure nothing has been simplified out)
+#check that the length of districtsPolygons equals districtsPolygonsSimple (make sure no districts have been simplified out)
 numDistricts = length(districtsDataFrame@data[[1]])
 numDistrictsSimple = length(districtsDataFrameSimple@data[[1]])
 numDistrictsSimpleReadTest = length(districtsDataFrameSimpleReadTest@data[[1]])
-if(TRUE) {
-  print('original data: ')
-  print(numDistricts)
-  print('simplified data: ')
-  print(numDistrictsSimple)
-  print('simplified data (read test): ')
-  print(numDistrictsSimpleReadTest)
+if(numDistricts != numDistrictsSimple || numDistricts != numDistrictsSimpleReadTest) {
+  print(paste('original data: ', numDistricts))
+  print(paste('simplified data: ', numDistrictsSimple))
+  print(paste('simplified data (read test): ', numDistrictsSimpleReadTest))
 }
 
 
